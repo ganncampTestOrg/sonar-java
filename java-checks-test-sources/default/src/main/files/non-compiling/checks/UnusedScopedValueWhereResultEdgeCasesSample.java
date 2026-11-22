@@ -192,6 +192,142 @@ void carrierAsConstructorArgumentDirect() {
   new CarrierHolder(ScopedValue.where(SCOPED, "hello")); // Compliant - escapes via constructor
 }
 
+// ===== REASSIGNMENT, BUILDER PATTERN =====
+
+void builderPatternReassignment() {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant - the carrier is extended and run
+  carrier = carrier.where(SCOPED2, "world");
+  carrier.run(() -> {
+  });
+}
+
+void builderPatternInLoop(java.util.List<String> values) {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant - extended in a loop and run
+  for (String value : values) {
+    carrier = carrier.where(SCOPED2, value);
+  }
+  carrier.run(() -> {
+  });
+}
+
+void conditionalReassignment(boolean condition) {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant - the first carrier is used when the condition is false
+  if (condition) {
+    carrier = ScopedValue.where(SCOPED2, "world");
+  }
+  carrier.run(() -> {
+  });
+}
+
+void reassignedAfterUse() {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant - used before the reassignment
+  carrier.run(() -> {
+  });
+  carrier = ScopedValue.where(SCOPED, "world");
+  carrier.run(() -> {
+  });
+}
+
+// ===== PARAMETERS =====
+
+interface CarrierConsumer {
+  void accept(ScopedValue.Carrier carrier); // Compliant - no body
+}
+
+abstract static class AbstractCarrierConsumer {
+  abstract void accept(ScopedValue.Carrier carrier); // Compliant - no body
+}
+
+static class StoringCarrierHolder {
+  ScopedValue.Carrier stored;
+
+  StoringCarrierHolder(ScopedValue.Carrier carrier) { // Compliant - stored in a field
+    this.stored = carrier;
+  }
+
+  void set(ScopedValue.Carrier carrier) { // Compliant - stored in a field
+    stored = carrier;
+  }
+}
+
+// ===== FIELDS WITH where() INITIALIZER =====
+
+static final ScopedValue.Carrier CONTEXT = ScopedValue.where(SCOPED, "hello"); // Compliant - fields can be used from anywhere
+
+void fieldUsedWithQualifiedName() {
+  EdgeCasesHolder.CONTEXT.run(() -> {
+  });
+}
+
+static class EdgeCasesHolder {
+  static final ScopedValue.Carrier CONTEXT = ScopedValue.where(SCOPED, "hello"); // Compliant - used with a qualified name
+}
+
+// ===== TERNARY, PARENTHESES, CAST =====
+
+void ternaryAssignedToVariable(boolean condition) {
+  var carrier = condition ? ScopedValue.where(SCOPED, "a") : ScopedValue.where(SCOPED, "b"); // Compliant - run below
+  carrier.run(() -> {
+  });
+}
+
+void ternaryAssignedToUnusedVariable(boolean condition) {
+  var carrier = condition ? ScopedValue.where(SCOPED, "a") : ScopedValue.where(SCOPED, "b"); // Noncompliant
+}
+
+void ternaryUsedDirectly(boolean condition) {
+  (condition ? ScopedValue.where(SCOPED, "a") : ScopedValue.where(SCOPED, "b")).run(() -> {
+  });
+}
+
+void parenthesizedUsedDirectly() {
+  (ScopedValue.where(SCOPED, "hello")).run(() -> {
+  });
+}
+
+void parenthesizedUnusedVariable() {
+  var carrier = (ScopedValue.where(SCOPED, "hello")); // Noncompliant
+}
+
+void parenthesizedVariableUse() {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant
+  (carrier).run(() -> {
+  });
+}
+
+ScopedValue.Carrier castReturned() {
+  return (ScopedValue.Carrier) ScopedValue.where(SCOPED, "hello"); // Compliant - returned
+}
+
+// ===== OTHER ESCAPING FORMS =====
+
+java.util.function.Supplier<ScopedValue.Carrier> lambdaBodyReturnsCarrier() {
+  return () -> ScopedValue.where(SCOPED, "hello"); // Compliant - returned by the lambda
+}
+
+void storedInFieldThroughVariable() {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant - stored in a field
+  this.carrierField = carrier;
+}
+
+void storedInFieldWithoutThis() {
+  var carrier = ScopedValue.where(SCOPED, "hello"); // Compliant - stored in a field
+  carrierField = carrier;
+}
+
+ScopedValue.Carrier yielded(int i) {
+  return switch (i) {
+    case 0 -> ScopedValue.where(SCOPED, "a"); // Compliant - yielded
+    default -> {
+      yield ScopedValue.where(SCOPED, "b"); // Compliant - yielded
+    }
+  };
+}
+
+ScopedValue.Carrier[] storedInArray() {
+  return new ScopedValue.Carrier[] {ScopedValue.where(SCOPED, "hello")}; // Compliant - escapes in an array
+}
+
 // ===== HELPER METHODS AND CLASSES =====
 
 void doSomething() {

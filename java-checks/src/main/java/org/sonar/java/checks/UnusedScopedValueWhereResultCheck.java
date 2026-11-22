@@ -18,20 +18,31 @@ package org.sonar.java.checks;
 
 import java.util.List;
 import java.util.Set;
+import javax.annotation.Nullable;
 import org.sonar.check.Rule;
 import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
 import org.sonar.plugins.java.api.semantic.MethodMatchers;
 import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.tree.Arguments;
 import org.sonar.plugins.java.api.tree.AssignmentExpressionTree;
+import org.sonar.plugins.java.api.tree.BlockTree;
 import org.sonar.plugins.java.api.tree.ConditionalExpressionTree;
+import org.sonar.plugins.java.api.tree.ExpressionStatementTree;
+import org.sonar.plugins.java.api.tree.ExpressionTree;
 import org.sonar.plugins.java.api.tree.IdentifierTree;
+import org.sonar.plugins.java.api.tree.LambdaExpressionTree;
+import org.sonar.plugins.java.api.tree.ListTree;
 import org.sonar.plugins.java.api.tree.MemberSelectExpressionTree;
 import org.sonar.plugins.java.api.tree.MethodInvocationTree;
+import org.sonar.plugins.java.api.tree.MethodTree;
+import org.sonar.plugins.java.api.tree.NewArrayTree;
 import org.sonar.plugins.java.api.tree.NewClassTree;
+import org.sonar.plugins.java.api.tree.ParenthesizedTree;
 import org.sonar.plugins.java.api.tree.ReturnStatementTree;
 import org.sonar.plugins.java.api.tree.Tree;
+import org.sonar.plugins.java.api.tree.TypeCastTree;
 import org.sonar.plugins.java.api.tree.VariableTree;
+import org.sonar.plugins.java.api.tree.YieldStatementTree;
 
 @Rule(key = "S8432")
 public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisitor {
@@ -73,7 +84,13 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
       return;
     }
 
+    // Look through ternaries, parentheses and casts: the enclosing expression decides what happens to the carrier
+    Tree node = mit;
     Tree parent = mit.parent();
+    while (isTransparentParent(parent, node)) {
+      node = parent;
+      parent = parent.parent();
+    }
 
     // Special case: if there is no parent, consider it consumed to avoid false positives
     if (parent == null) {
@@ -101,7 +118,7 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
     }
 
     // Check if result escapes (returned or passed as argument)
-    if (isEscaping(mit)) {
+    if (isEscaping(node)) {
       return;
     }
 
@@ -111,16 +128,16 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
 
   private void checkCarrierVariable(VariableTree variableTree) {
     Symbol symbol = variableTree.symbol();
-    if (!symbol.isVariableSymbol()) {
+    // Fields can be used from anywhere (other files, qualified names), so only locals and parameters are analyzed
+    if (!symbol.isVariableSymbol() || !(symbol.isLocalVariable() || symbol.isParameter())) {
       return;
     }
 
     // Check if this variable is initialized with a where() call
-    var initializer = variableTree.initializer();
-    boolean isWhereResult = initializer instanceof MethodInvocationTree mit && WHERE_MATCHER.matches(mit);
+    boolean isWhereResult = isWhereResult(variableTree.initializer());
 
-    // Check if this variable is a Carrier type parameter
-    boolean isCarrierParameter = symbol.isParameter() && isCarrierType(symbol);
+    // Check if this variable is a Carrier type parameter of a method with a body
+    boolean isCarrierParameter = symbol.isParameter() && isCarrierType(symbol) && hasBody(variableTree);
 
     if (!isWhereResult && !isCarrierParameter) {
       return;
@@ -131,7 +148,7 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
     List<IdentifierTree> usages = variableSymbol.usages();
 
     // Check if variable is reassigned before proper use
-    if (isWhereResult && isReassignedBeforeProperUse(usages)) {
+    if (isWhereResult && isReassignedBeforeProperUse(variableTree, usages)) {
       reportIssue(variableTree.simpleName(), MESSAGE);
       return;
     }
@@ -143,13 +160,15 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
     }
   }
 
-  private boolean isReassignedBeforeProperUse(List<IdentifierTree> usages) {
+  private boolean isReassignedBeforeProperUse(VariableTree declaration, List<IdentifierTree> usages) {
     for (IdentifierTree usage : usages) {
       // Check if this usage is a reassignment (left side of assignment)
       Tree parent = usage.parent();
-      if (parent instanceof AssignmentExpressionTree assignment && assignment.variable() == usage) {
-        // This is a reassignment - check if there's any proper use before this reassignment
-        // For simplicity, if we see a reassignment and no proper use, consider it unused
+      if (parent instanceof AssignmentExpressionTree assignment
+        && assignment.variable() == usage
+        && isUnconditionalReassignment(declaration, assignment)
+        && !isReadInside(assignment.expression(), usages)) {
+        // This is a reassignment that always runs and does not read the variable - check if there's any proper use before it
         boolean hasProperUseBefore = usages.stream()
           .filter(u -> u != usage)
           .filter(u -> isBefore(u, usage))
@@ -162,8 +181,67 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
     return false;
   }
 
+  /**
+   * A reassignment that is a statement of the same block as the declaration always runs once the declaration was executed.
+   * Reassignments in branches or loops may be skipped, so the initial carrier may still be in use.
+   */
+  private static boolean isUnconditionalReassignment(VariableTree declaration, AssignmentExpressionTree assignment) {
+    return assignment.parent() instanceof ExpressionStatementTree statement
+      && declaration.parent() instanceof BlockTree
+      && statement.parent() == declaration.parent();
+  }
+
+  /**
+   * A reassignment such as <code>c = c.where(K, v)</code> reads the variable, which counts as using it.
+   */
+  private static boolean isReadInside(Tree expression, List<IdentifierTree> usages) {
+    return usages.stream().anyMatch(u -> isDescendantOf(u, expression));
+  }
+
+  private static boolean isDescendantOf(Tree tree, Tree ancestor) {
+    Tree current = tree;
+    while (current != null) {
+      if (current == ancestor) {
+        return true;
+      }
+      current = current.parent();
+    }
+    return false;
+  }
+
   private static boolean isBefore(IdentifierTree first, IdentifierTree second) {
     return first.identifierToken().range().start().isBefore(second.identifierToken().range().start());
+  }
+
+  private static boolean isWhereResult(@Nullable ExpressionTree expression) {
+    if (expression instanceof MethodInvocationTree mit) {
+      return WHERE_MATCHER.matches(mit);
+    }
+    if (expression instanceof ParenthesizedTree parenthesized) {
+      return isWhereResult(parenthesized.expression());
+    }
+    if (expression instanceof TypeCastTree typeCast) {
+      return isWhereResult(typeCast.expression());
+    }
+    if (expression instanceof ConditionalExpressionTree conditional) {
+      return isWhereResult(conditional.trueExpression()) || isWhereResult(conditional.falseExpression());
+    }
+    return false;
+  }
+
+  private static boolean isTransparentParent(@Nullable Tree parent, Tree child) {
+    return parent instanceof ParenthesizedTree
+      || parent instanceof TypeCastTree
+      || (parent instanceof ConditionalExpressionTree conditional && conditional.condition() != child);
+  }
+
+  private static boolean hasBody(VariableTree parameter) {
+    Symbol owner = parameter.symbol().owner();
+    if (owner instanceof Symbol.MethodSymbol methodSymbol) {
+      MethodTree declaration = methodSymbol.declaration();
+      return declaration == null || declaration.block() != null;
+    }
+    return true;
   }
 
   private static boolean isCarrierType(Symbol symbol) {
@@ -178,8 +256,14 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
       return false;
     }
 
+    Tree node = usage;
+    while (parent instanceof ParenthesizedTree || parent instanceof TypeCastTree) {
+      node = parent;
+      parent = parent.parent();
+    }
+
     // Check if usage is consumed via .run() or .call()
-    if (parent instanceof MemberSelectExpressionTree memberSelect && memberSelect.expression() == usage) {
+    if (parent instanceof MemberSelectExpressionTree memberSelect && memberSelect.expression() == node) {
       String methodName = memberSelect.identifier().name();
       if (CONSUMPTION_METHODS.contains(methodName)) {
         return true;
@@ -207,7 +291,7 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
     }
 
     // Check if usage escapes (returned or passed as argument)
-    return isEscaping(usage);
+    return isEscaping(node);
   }
 
   private static boolean isImmediatelyConsumed(Tree parent) {
@@ -255,20 +339,40 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
   }
 
   private static boolean isEscaping(Tree tree) {
+    Tree child = tree;
     Tree parent = tree.parent();
+    while (parent instanceof ParenthesizedTree || parent instanceof TypeCastTree) {
+      child = parent;
+      parent = parent.parent();
+    }
 
     if (parent == null) {
       return false;
     }
 
-    // Returned from method
-    if (parent instanceof ReturnStatementTree) {
+    // Returned from method, or yielded from a switch expression
+    if (parent instanceof ReturnStatementTree || parent instanceof YieldStatementTree) {
       return true;
     }
 
     // Passed as argument to another method or constructor
     if (parent instanceof Arguments) {
       return true;
+    }
+
+    // Stored into an array
+    if (parent instanceof NewArrayTree || (parent instanceof ListTree<?> && parent.parent() instanceof NewArrayTree)) {
+      return true;
+    }
+
+    // Stored into a variable or field by assignment (right-hand side)
+    if (parent instanceof AssignmentExpressionTree assignment) {
+      return assignment.expression() == child;
+    }
+
+    // Returned from an expression lambda
+    if (parent instanceof LambdaExpressionTree lambda) {
+      return lambda.body() == child;
     }
 
     // Used in ternary expression - check if the ternary escapes
@@ -278,11 +382,9 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
 
     // Passed to constructor
     if (parent instanceof NewClassTree newClass) {
-      return newClass.arguments().contains(tree);
+      return newClass.arguments().contains(child);
     }
 
     return false;
   }
 }
-
-

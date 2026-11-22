@@ -1,0 +1,25 @@
+<p>This rule raises an issue when the <code>ScopedValue.Carrier</code> returned by <code>ScopedValue.where()</code> is neither run nor
+returned.</p>
+<h2>Why is this an issue?</h2>
+<p><code>ScopedValue.where()</code> does not bind a value by itself. It returns a <code>ScopedValue.Carrier</code>, and the binding only takes effect
+while the <code>run()</code> or <code>call()</code> method of that carrier is executing. If the carrier is dropped, the call to <code>where()</code>
+has no effect and the scoped value stays unbound, which usually leads to a <code>NoSuchElementException</code> or to the wrong value being read.</p>
+<h2>How to fix it</h2>
+<p>Call <code>run()</code> or <code>call()</code> on the carrier, or pass the carrier to code that does. If the call to <code>where()</code> is not
+needed, remove it.</p>
+<h3>Code examples</h3>
+<h4>Noncompliant code example</h4>
+<pre data-diff-id="1" data-diff-type="noncompliant">
+ScopedValue.where(USER, "alice"); // Noncompliant
+doWork();
+</pre>
+<h4>Compliant solution</h4>
+<pre data-diff-id="1" data-diff-type="compliant">
+ScopedValue.where(USER, "alice").run(() -&gt; doWork());
+</pre>
+<h2>Resources</h2>
+<h3>Documentation</h3>
+<ul>
+  <li> Java Documentation - <a href="https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/ScopedValue.html">ScopedValue</a> </li>
+  <li> JEP 506 - <a href="https://openjdk.org/jeps/506">Scoped Values</a> </li>
+</ul>
