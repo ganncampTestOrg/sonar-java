@@ -299,6 +299,27 @@ ScopedValue.Carrier castReturned() {
   return (ScopedValue.Carrier) ScopedValue.where(SCOPED, "hello"); // Compliant - returned
 }
 
+void ternaryPickedThenRun(boolean flag) {
+  var c1 = ScopedValue.where(SCOPED, "a"); // Compliant - picked by the ternary and run
+  var c2 = ScopedValue.where(SCOPED, "b"); // Compliant - picked by the ternary and run
+  (flag ? c1 : c2).run(() -> {
+  });
+}
+
+void ternaryPickedIntoVariableThenRun(boolean flag) {
+  var c1 = ScopedValue.where(SCOPED, "a"); // Compliant - picked by the ternary and run
+  var c2 = ScopedValue.where(SCOPED, "b"); // Compliant - picked by the ternary and run
+  var c = flag ? c1 : c2;
+  c.run(() -> {
+  });
+}
+
+void parenthesizedChainedWhereThenRun() {
+  var c = ScopedValue.where(SCOPED, "a"); // Compliant - extended and run
+  (c.where(SCOPED2, "b")).run(() -> {
+  });
+}
+
 // ===== OTHER ESCAPING FORMS =====
 
 java.util.function.Supplier<ScopedValue.Carrier> lambdaBodyReturnsCarrier() {

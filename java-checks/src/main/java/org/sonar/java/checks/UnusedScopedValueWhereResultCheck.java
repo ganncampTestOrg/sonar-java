@@ -257,7 +257,7 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
     }
 
     Tree node = usage;
-    while (parent instanceof ParenthesizedTree || parent instanceof TypeCastTree) {
+    while (isTransparentParent(parent, node)) {
       node = parent;
       parent = parent.parent();
     }
@@ -309,7 +309,12 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
   }
 
   private boolean isChainEventuallyConsumed(MethodInvocationTree mit) {
+    Tree node = mit;
     Tree parent = mit.parent();
+    while (isTransparentParent(parent, node)) {
+      node = parent;
+      parent = parent.parent();
+    }
 
     // Special case: if there is no parent, consider it consumed to avoid false positives
     if (parent == null) {
@@ -324,7 +329,7 @@ public class UnusedScopedValueWhereResultCheck extends IssuableSubscriptionVisit
       return isChainEventuallyConsumed(nextMit);
     }
 
-    if (isEscaping(mit)) {
+    if (isEscaping(node)) {
       return true;
     }
 
