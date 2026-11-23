@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -41,10 +41,21 @@ public interface ImportTree extends ImportClauseTree {
    */
   boolean isStatic();
 
+  /**
+   * @since Java 25
+   */
+  boolean isModule();
+
   SyntaxToken importKeyword();
 
   @Nullable
   SyntaxToken staticKeyword();
+
+  @Nullable
+  /**
+   * @since Java 25
+   */
+  SyntaxToken moduleKeyword();
 
   Tree qualifiedIdentifier();
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,6 @@ import org.sonar.java.checks.verifier.CheckVerifier;
 import org.sonar.java.checks.verifier.TestUtils;
 import org.sonar.java.model.LineUtils;
 import org.sonar.java.reporting.AnalyzerMessage;
-import org.sonar.java.testing.JavaFileScannerContextForTests;
 import org.sonar.java.testing.VisitorsBridgeForTests;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.tree.SyntaxTrivia;
@@ -87,10 +86,13 @@ public class FilterVerifier {
     }
     VisitorsBridgeForTests visitorsBridge = visitorsBridgeBuilder.build();
     JavaAstScanner.scanSingleFileForTests(inputFile, visitorsBridge);
-    JavaFileScannerContextForTests testJavaFileScannerContext = visitorsBridge.lastCreatedTestContext();
+
+    Set<AnalyzerMessage> issues = new HashSet<>();
+    for (var testJavaFileScannerContext : visitorsBridge.testContexts()) {
+      issues.addAll(testJavaFileScannerContext.getIssues());
+    }
 
     Map<Integer, Set<String>> issuesByLines = new HashMap<>();
-    Set<AnalyzerMessage> issues = testJavaFileScannerContext.getIssues();
     for (AnalyzerMessage analyzerMessage : issues) {
       Integer issueLine = analyzerMessage.getLine();
       String ruleKey = AnnotationUtils.getAnnotation(analyzerMessage.getCheck().getClass(), Rule.class).key();

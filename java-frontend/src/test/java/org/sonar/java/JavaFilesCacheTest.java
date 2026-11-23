@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,4 +44,14 @@ class JavaFilesCacheTest {
         "org/sonar/java/JavaFilesCacheTestFile$A$3");
   }
 
+  @Test
+  void compact_source() {
+    JavaFilesCache javaFilesCache = new JavaFilesCache();
+    JavaAstScanner.scanSingleFileForTests(TestUtils.inputFile("src/test/resources/JavaFilesCacheTestFileCompact.java"), new VisitorsBridge(javaFilesCache));
+
+    Set<String> classNames = javaFilesCache.getClassNames();
+    assertThat(classNames)
+      .hasSize(4)
+      .contains("$1$1", "$1", "$1$C", "$1$C$D");
+  }
 }

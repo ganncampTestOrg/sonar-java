@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -46,7 +46,7 @@ public class CallToDeprecatedCodeMarkedForRemovalCheck extends AbstractCallToDep
 
   @Override
   void checkOverridingMethod(MethodTree methodTree, List<Symbol.MethodSymbol> deprecatedSymbols) {
-    if (deprecatedSymbols.stream().anyMatch(this::isFlaggedForRemoval)) {
+    if (deprecatedSymbols.stream().anyMatch(methodSymbol -> isFlaggedForRemoval(methodSymbol) && !methodSymbol.isAbstract())) {
       reportIssue(methodTree.simpleName(), "Don't override this deprecated method, it has been marked for removal.");
     }
   }

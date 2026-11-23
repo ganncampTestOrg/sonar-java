@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>83.0.0.2369</version>
+    <version>86.0.0.3040</version>
   </parent>
 
   <groupId>org.sonarsource.java</groupId>
   <artifactId>java</artifactId>
-  <version>8.19.0-SNAPSHOT</version>
+  <version>8.24.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarJava</name>
   <description>Code Analyzer for Java :: Parent POM</description>
@@ -75,8 +75,8 @@
     <url>https://jira.sonarsource.com/browse/SONARJAVA</url>
   </issueManagement>
   <ciManagement>
-    <system>Cirrus CI</system>
-    <url>https://cirrus-ci.com/github/SonarSource/sonar-java</url>
+    <system>GitHub Actions</system>
+    <url>https://github.com/SonarSource/sonar-java/actions/workflows/build.yml</url>
   </ciManagement>
 
   <properties>
@@ -87,12 +87,15 @@
     <maven.test.redirectTestOutputToFile>true</maven.test.redirectTestOutputToFile>
 
     <sonar.version>25.1.0.102122</sonar.version>
+    <!-- Required by shadow scans -->
+    <sonar.organization>sonarsource</sonar.organization>
     <!--
       sonar-plugin-api should be compatible with SQ peach. You can see which version SQ is using
       at SonarSource/sonarqube/gradle.properties
      -->
     <sonar.plugin.api.version>13.0.0.3026</sonar.plugin.api.version>
     <sonarlint.plugin.api.version>10.13.0.79996</sonarlint.plugin.api.version>
+    <sonar.sca.exclusions>its/**,java-checks-test-sources/**</sonar.sca.exclusions>
     <analyzer.commons.version>2.18.0.3393</analyzer.commons.version>
     <orchestrator.version>5.6.2.2625</orchestrator.version>
     <sslr.version>1.24.0.633</sslr.version>
@@ -275,12 +278,12 @@
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-lang3</artifactId>
-        <version>3.18.0</version>
+        <version>3.20.0</version>
       </dependency>
       <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-expression</artifactId>
-        <version>6.1.21</version>
+        <version>6.2.11</version>
       </dependency>
       <dependency>
         <groupId>commons-io</groupId>

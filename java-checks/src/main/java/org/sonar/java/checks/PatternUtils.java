@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,7 +28,7 @@ public final class PatternUtils {
     String[] p = StringUtils.split(patterns, ',');
     WildcardPattern[] result = new WildcardPattern[p.length];
     for (int i = 0; i < result.length; i++) {
-      result[i] = WildcardPattern.create(StringUtils.trim(p[i]), ".");
+      result[i] = WildcardPattern.create(p[i].trim(), ".");
     }
     return result;
   }

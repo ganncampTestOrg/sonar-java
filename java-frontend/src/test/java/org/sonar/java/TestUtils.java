@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,13 +19,16 @@ package org.sonar.java;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
+import org.sonar.api.batch.bootstrap.ProjectDefinition;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -143,5 +146,36 @@ public class TestUtils {
     when(mock.testChecks()).thenReturn(List.of());
     when(mock.jspChecks()).thenReturn(List.of());
     return mock;
+  }
+
+  public static ProjectDefinition mockProjectDefinition() {
+    var rootProj = mock(ProjectDefinition.class);
+    doReturn(new File("/foo/bar/proj")).when(rootProj).getBaseDir();
+    var childModule = mock(ProjectDefinition.class);
+    doReturn(new File("/foo/bar/proj/pmodule/cmodule")).when(childModule).getBaseDir();
+    doReturn(rootProj).when(childModule).getParent();
+
+    return childModule;
+  }
+
+  public static ProjectDefinition mockProjectDefinitionWithModuleKeys() {
+    var rootProj = mock(ProjectDefinition.class);
+    doReturn(new File("/foo/bar/proj")).when(rootProj).getBaseDir();
+    
+    var child1Module = mock(ProjectDefinition.class);
+    doReturn(new File("/foo/bar/proj/pmodule/cmodule")).when(child1Module).getBaseDir();
+    doReturn(rootProj).when(child1Module).getParent();
+    var child1Properties = new HashMap<String, String>();
+    child1Properties.put("sonar.moduleKey", "propj:module1");
+    when(child1Module.properties()).thenReturn(child1Properties);
+
+    var child2Module = mock(ProjectDefinition.class);
+    doReturn(new File("/foo/bar/proj/pmodule/cmodule/c2module")).when(child2Module).getBaseDir();
+    doReturn(child1Module).when(child2Module).getParent();
+    var child2Properties = new HashMap<String, String>();
+    child2Properties.put("sonar.moduleKey", "module2");
+    when(child2Module.properties()).thenReturn(child2Properties);
+
+    return child2Module;
   }
 }

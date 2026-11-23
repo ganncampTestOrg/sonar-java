@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@ import org.sonar.api.SonarProduct;
 import org.sonar.api.config.PropertyDefinition;
 import org.sonar.java.AnalysisWarningsWrapper;
 import org.sonar.java.DefaultJavaResourceLocator;
+import org.sonar.java.DefaultModuleMetadata;
 import org.sonar.java.JavaConstants;
 import org.sonar.java.SonarComponents;
 import org.sonar.java.classpath.ClasspathForMain;
@@ -117,6 +118,7 @@ public class JavaPlugin implements Plugin {
       PostAnalysisIssueFilter.class));
 
     list.add(AnalysisWarningsWrapper.class);
+    list.add(DefaultModuleMetadata.class);
     context.addExtensions(Collections.unmodifiableList(list));
   }
 

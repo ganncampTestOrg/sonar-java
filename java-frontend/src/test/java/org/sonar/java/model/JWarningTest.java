@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -201,7 +201,7 @@ class JWarningTest {
   private static ImportTree importTree(int startLine, int startColumn, int endLine, int endColumn) {
     InternalSyntaxToken fakeStartToken = syntaxToken(startLine, startColumn, " ");
     InternalSyntaxToken fakeEndToken = syntaxToken(endLine, endColumn, " ");
-    return new JavaTree.ImportTreeImpl(fakeStartToken, null, null, fakeEndToken);
+    return new JavaTree.ImportTreeImpl(fakeStartToken, null, null, null, fakeEndToken);
   }
 
   private static VariableTree variableTree(int startLine, int startColumn, int endLine, int endColumn) {

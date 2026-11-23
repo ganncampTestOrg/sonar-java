@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,6 +30,10 @@ class AtLeastOneConstructorCheckTest {
       .onFile(mainCodeSourcesPath("checks/AtLeastOneConstructorCheckSample.java"))
       .withCheck(new AtLeastOneConstructorCheck())
       .verifyIssues();
+    CheckVerifier.newVerifier()
+      .onFile(mainCodeSourcesPath("checks/AtLeastOneConstructorCheckJakartaSample.java"))
+      .withCheck(new AtLeastOneConstructorCheck())
+      .verifyNoIssues();
   }
 
   @Test

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -54,11 +54,13 @@ public class AtLeastOneConstructorCheck extends IssuableSubscriptionVisitor {
     "javax.annotation.Resource",
     "javax.ejb.EJB",
     "javax.inject.Inject",
+    "jakarta.inject.Inject",
     "org.apache.maven.plugins.annotations.Component",
     "org.apache.maven.plugins.annotations.Parameter",
     "org.codehaus.plexus.component.annotations.Requirement",
-    "org.codehaus.plexus.component.annotations.Configuration"
-    );
+    "org.codehaus.plexus.component.annotations.Configuration",
+    "org.springframework.beans.factory.annotation.Value"
+  );
 
   @Override
   public List<Kind> nodesToVisit() {

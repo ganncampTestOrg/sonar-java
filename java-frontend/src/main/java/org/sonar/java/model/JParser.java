@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -575,20 +575,32 @@ public class JParser {
     for (int i = 0; i < e.imports().size(); i++) {
       ImportDeclaration e2 = (ImportDeclaration) e.imports().get(i);
       ExpressionTree name = convertImportName(e2.getName());
-      if (e2.isOnDemand()) {
-        name = new MemberSelectExpressionTreeImpl(
-          name,
-          lastTokenIn(e2, TerminalToken.TokenNameDOT),
-          new IdentifierTreeImpl(lastTokenIn(e2, TerminalToken.TokenNameMULTIPLY))
-        );
+
+      boolean isModuleImport = org.eclipse.jdt.core.dom.Modifier.isModule(e2.getModifiers());
+
+      // "on demand" means `import pkg.*;`
+      if (e2.isOnDemand() && !isModuleImport) {
+        InternalSyntaxToken dotToken = lastTokenIn(e2, TerminalToken.TokenNameDOT);
+        InternalSyntaxToken identifierToken = lastTokenIn(e2, TerminalToken.TokenNameMULTIPLY);
+        name = new MemberSelectExpressionTreeImpl(name, dotToken, new IdentifierTreeImpl(identifierToken));
       }
+
+      InternalSyntaxToken staticKeyword = e2.isStatic() ? firstTokenIn(e2, TerminalToken.TokenNamestatic) : null;
+      InternalSyntaxToken moduleKeyword = isModuleImport ? firstTokenIn(e2, TerminalToken.TokenNamemodule) : null;
+
       JavaTree.ImportTreeImpl t = new JavaTree.ImportTreeImpl(
         firstTokenIn(e2, TerminalToken.TokenNameimport),
-        e2.isStatic() ? firstTokenIn(e2, TerminalToken.TokenNamestatic) : null,
+        staticKeyword,
+        moduleKeyword,
         name,
         lastTokenIn(e2, TerminalToken.TokenNameSEMICOLON)
       );
-      t.binding = e2.resolveBinding();
+
+      if (!isModuleImport) {
+        // There is no method to resolve bindings for a module import.
+        t.binding = e2.resolveBinding();
+      }
+
       imports.add(t);
 
       int tokenIndex = tokenManager.lastIndexIn(e2, TerminalToken.TokenNameSEMICOLON);
@@ -757,7 +769,27 @@ public class JParser {
     }
   }
 
+  /** Converts implicitly declared unnamed class at the top level of a compact compilation unit. */
+  private ClassTreeImpl convertUnnamedClassDeclaration(AbstractTypeDeclaration e) {
+    List<Tree> members = new ArrayList<>();
+
+    for (Object o : e.bodyDeclarations()) {
+      processBodyDeclaration((BodyDeclaration) o, members);
+    }
+
+    ClassTreeImpl t = new ClassTreeImpl(Tree.Kind.IMPLICIT_CLASS, null, members, null);
+
+    t.typeBinding = e.resolveBinding();
+    declaration(t.typeBinding, t);
+
+    return t;
+  }
+
   private ClassTreeImpl convertTypeDeclaration(AbstractTypeDeclaration e) {
+    if (e.getNodeType() == ASTNode.UNNAMED_CLASS) {
+      return convertUnnamedClassDeclaration(e);
+    }
+
     List<Tree> members = new ArrayList<>();
 
     int leftBraceTokenIndex = findLeftBraceTokenIndex(e);
@@ -920,7 +952,7 @@ public class JParser {
         return ((EnumDeclaration) e).superInterfaceTypes();
       case ASTNode.RECORD_DECLARATION:
         return ((RecordDeclaration) e).superInterfaceTypes();
-      case ASTNode.ANNOTATION_TYPE_DECLARATION:
+      case ASTNode.ANNOTATION_TYPE_DECLARATION, ASTNode.UNNAMED_CLASS:
         return Collections.emptyList();
       default:
         throw new IllegalStateException(ASTNode.nodeClassForType(e.getNodeType()).toString());
@@ -1009,7 +1041,8 @@ public class JParser {
       case ASTNode.ANNOTATION_TYPE_DECLARATION,
         ASTNode.ENUM_DECLARATION,
         ASTNode.RECORD_DECLARATION,
-        ASTNode.TYPE_DECLARATION:
+        ASTNode.TYPE_DECLARATION,
+        ASTNode.UNNAMED_CLASS:
         lastTokenIndex = processTypeDeclaration((AbstractTypeDeclaration) node, members);
         break;
       case ASTNode.ANNOTATION_TYPE_MEMBER_DECLARATION:

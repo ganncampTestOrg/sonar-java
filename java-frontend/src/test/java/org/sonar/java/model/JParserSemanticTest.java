@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,6 +47,7 @@ import org.sonar.java.model.expression.MemberSelectExpressionTreeImpl;
 import org.sonar.java.model.expression.MethodInvocationTreeImpl;
 import org.sonar.java.model.expression.MethodReferenceTreeImpl;
 import org.sonar.java.model.expression.NewClassTreeImpl;
+import org.sonar.java.model.location.InternalRange;
 import org.sonar.java.model.statement.BlockTreeImpl;
 import org.sonar.java.model.statement.BreakStatementTreeImpl;
 import org.sonar.java.model.statement.ContinueStatementTreeImpl;
@@ -58,6 +59,7 @@ import org.sonar.java.model.statement.StaticInitializerTreeImpl;
 import org.sonar.java.model.statement.SwitchExpressionTreeImpl;
 import org.sonar.java.model.statement.YieldStatementTreeImpl;
 import org.sonar.plugins.java.api.JavaVersion;
+import org.sonar.plugins.java.api.location.Position;
 import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.semantic.Symbol.MethodSymbol;
 import org.sonar.plugins.java.api.semantic.SymbolMetadata;
@@ -2065,5 +2067,78 @@ class JParserSemanticTest {
     assertNotEquals(pOfA.symbol(), pOfC.symbol());
     assertNotEquals(pOfB.symbol(), pOfC.symbol());
 
+  }
+
+  @Test
+  void testImportModule() {
+    String source = """
+      package com.example;
+
+      import module java.base;
+
+      import static java.sql.Connection.TRANSACTION_NONE;
+
+      public class Source {
+        List<Integer> xs = new ArrayList<>();
+        Set<Integer> ys = new HashSet<>();
+      }
+      """;
+
+    JavaTree.CompilationUnitTreeImpl cu = test(source);
+
+    JavaTree.ImportTreeImpl importModule = (JavaTree.ImportTreeImpl) cu.imports().get(0);
+
+    assertThat(importModule.isModule()).isTrue();
+    assertThat(importModule.isStatic()).isFalse();
+    assertThat(importModule.symbol()).isNull();
+
+    MemberSelectExpressionTree javaBase = (MemberSelectExpressionTree) importModule.qualifiedIdentifier();
+    assertThat(javaBase.identifier().name()).isEqualTo("base");
+
+    assertThat(importModule.moduleKeyword().range()).isEqualTo(
+      new InternalRange(Position.at(3, 8), Position.at(3, 14))
+    );
+
+    JavaTree.ImportTreeImpl importConst = (JavaTree.ImportTreeImpl) cu.imports().get(1);
+    assertThat(importConst.isModule()).isFalse();
+  }
+
+  @Test
+  void compactSource_simple() {
+    String source = """
+      void main() {
+      }
+    """;
+    JavaTree.CompilationUnitTreeImpl cu = test(source);
+    assertThat(cu.types()).hasSize(1);
+    ClassTreeImpl clazz = (ClassTreeImpl) cu.types().get(0);
+    assertThat(clazz).isNotNull();
+    assertThat(clazz.kind()).isEqualTo(Tree.Kind.IMPLICIT_CLASS);
+    assertThat(clazz.simpleName()).isNull();
+    assertThat(clazz.openBraceToken()).isNull();
+    assertThat(clazz.closeBraceToken()).isNull();
+  }
+
+  @Test
+  void compactSource_complex() {
+    String source = """
+      void main() {
+        System.out.println("Hello, World!");
+      }
+      int i = 43;
+      class Helper {
+        void help() {
+          System.out.println("Helping...");
+        }
+      }
+    """;
+    JavaTree.CompilationUnitTreeImpl cu = test(source);
+    ClassTreeImpl clazz = (ClassTreeImpl) cu.types().get(0);
+    assertThat(clazz).isNotNull();
+    assertThat(clazz.kind()).isEqualTo(Tree.Kind.IMPLICIT_CLASS);
+    assertThat(clazz.members()).hasSize(3);
+    assertThat(clazz.members().get(0).kind()).isEqualTo(Tree.Kind.METHOD);
+    assertThat(clazz.members().get(1).kind()).isEqualTo(Tree.Kind.VARIABLE);
+    assertThat(clazz.members().get(2).kind()).isEqualTo(Tree.Kind.CLASS);
   }
 }

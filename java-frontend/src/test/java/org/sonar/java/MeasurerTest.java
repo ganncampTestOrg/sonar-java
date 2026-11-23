@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -75,6 +75,11 @@ class MeasurerTest {
   @Test
   void verify_statements_metric() {
     checkMetric("Statements.java", "statements", 18);
+  }
+
+  @Test
+  void verify_compact_source() {
+    checkMetric("CompactSource.java", "classes", 1);
   }
 
   @Test

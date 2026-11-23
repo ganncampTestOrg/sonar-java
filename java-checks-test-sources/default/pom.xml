@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.sonarsource.java</groupId>
     <artifactId>java-checks-test-sources</artifactId>
-    <version>8.19.0-SNAPSHOT</version>
+    <version>8.24.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>default</artifactId>
@@ -19,6 +19,7 @@
     <forbiddenapis.skip>true</forbiddenapis.skip>
     <skipTests>true</skipTests>
     <maven.deploy.skip>true</maven.deploy.skip>
+    <org.junit.jupiter.version>5.14.0</org.junit.jupiter.version>
   </properties>
 
   <dependencyManagement>
@@ -463,6 +464,12 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>javax.enterprise</groupId>
+      <artifactId>cdi-api</artifactId>
+      <version>2.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
       <version>32.1.1-jre</version>
@@ -527,7 +534,7 @@
     <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
-      <version>7.5.1</version>
+      <version>7.12.0</version>
       <type>jar</type>
       <scope>provided</scope>
     </dependency>
@@ -687,13 +694,13 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-api</artifactId>
-      <version>5.7.1</version>
+      <version>${org.junit.jupiter.version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-params</artifactId>
-      <version>5.7.1</version>
+      <version>${org.junit.jupiter.version}</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -940,6 +947,12 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
+      <groupId>io.micronaut.aws</groupId>
+      <artifactId>micronaut-function-aws</artifactId>
+      <version>4.8.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
       <groupId>com.fasterxml.woodstox</groupId>
       <artifactId>woodstox-core</artifactId>
       <version>6.4.0</version>
@@ -999,11 +1012,6 @@
       <version>0.10.4</version>
     </dependency>
     <dependency>
-      <groupId>org.jspecify</groupId>
-      <artifactId>jspecify</artifactId>
-      <version>1.0.0</version>
-    </dependency>
-    <dependency>
       <groupId>org.junit.platform</groupId>
       <artifactId>junit-platform-suite</artifactId>
       <scope>provided</scope>
@@ -1028,9 +1036,7 @@
           <compilerArgs>
             <arg>-Xlint:-deprecation</arg>
           </compilerArgs>
-          <release>24</release>
-          <source>24</source>
-          <target>24</target>
+          <release>25</release>
           <annotationProcessorPaths>
             <path>
               <groupId>org.projectlombok</groupId>

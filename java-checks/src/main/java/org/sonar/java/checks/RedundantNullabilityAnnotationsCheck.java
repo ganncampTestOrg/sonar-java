@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,6 @@ import java.util.Objects;
 import java.util.Optional;
 import org.sonar.check.Rule;
 import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
-import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.semantic.SymbolMetadata;
 import org.sonar.plugins.java.api.tree.ClassTree;
 import org.sonar.plugins.java.api.tree.MethodTree;
@@ -61,6 +60,10 @@ public class RedundantNullabilityAnnotationsCheck extends IssuableSubscriptionVi
         // if nullable, either directly or inherited from higher scope
         // then check my members are not directly annotated with non-null
         checkMembers(classNullabilityData, classTree, NULLABILITY_SCOPE.NULLABLE);
+      } else if (classNullabilityData.type() == SymbolMetadata.NullabilityType.UNKNOWN) {
+        // Handle classes with UNKNOWN nullability (e.g., @NullUnmarked)
+        // Still need to check their members in case they have nested @NullMarked/@NullUnmarked
+        checkMembers(classNullabilityData, classTree, NULLABILITY_SCOPE.UNSPECIFIED);
       }
     }
   }
@@ -72,7 +75,7 @@ public class RedundantNullabilityAnnotationsCheck extends IssuableSubscriptionVi
       if (member.is(Tree.Kind.VARIABLE)) {
         // check field
         VariableTree variableTree = (VariableTree) member;
-        checkSymbol(classNullabilityData, variableTree, VARIABLE, variableTree.symbol(), scope);
+        checkSymbol(classNullabilityData, variableTree, VARIABLE, variableTree.symbol().metadata(), scope);
       } else if (member.is(Tree.Kind.METHOD)) {
         // check method
         checkMethod(classNullabilityData, (MethodTree) member, scope);
@@ -100,22 +103,29 @@ public class RedundantNullabilityAnnotationsCheck extends IssuableSubscriptionVi
       }
       // now recurse to check class members
       checkMembers(innerNullabilityData, tree, NULLABILITY_SCOPE.NULLABLE);
+    } else {
+      // Handle classes with UNKNOWN nullability (e.g., @NullUnmarked)
+      // Still need to check their members in case they have nested @NullMarked/@NullUnmarked
+      if (innerNullabilityData.type() == SymbolMetadata.NullabilityType.UNKNOWN) {
+        checkMembers(innerNullabilityData, tree, NULLABILITY_SCOPE.UNSPECIFIED);
+      }
     }
   }
 
   private void checkMethod(SymbolMetadata.NullabilityData classNullabilityData,
     MethodTree method, NULLABILITY_SCOPE scope) {
     // check return type at method level - do not look up hierarchy
-    checkSymbol(classNullabilityData, method, METHOD, method.symbol(), scope);
+    checkSymbol(classNullabilityData, method, METHOD, method.symbol().metadata(), scope);
     // check parameters at variable level - do not look up hierarchy
     method.parameters().forEach(parameter ->
-      checkSymbol(classNullabilityData, parameter, VARIABLE, parameter.symbol(), scope)
+      checkSymbol(classNullabilityData, parameter, VARIABLE, parameter.symbol().metadata(), scope)
     );
   }
 
   private void checkSymbol(SymbolMetadata.NullabilityData classNullabilityData, Tree tree,
-    SymbolMetadata.NullabilityLevel treeLevel, Symbol symbol, NULLABILITY_SCOPE scope) {
-    SymbolMetadata.NullabilityData symbolNullabilityData = symbol.metadata().nullabilityData();
+    SymbolMetadata.NullabilityLevel treeLevel, SymbolMetadata metadata, NULLABILITY_SCOPE scope) {
+    SymbolMetadata.NullabilityData symbolNullabilityData = metadata.nullabilityData();
+
     if (symbolNullabilityData.isNonNull(treeLevel, false, false) &&
       scope.equals(NULLABILITY_SCOPE.NON_NULLABLE)) {
       reportIssue(tree, symbolNullabilityData, classNullabilityData);
@@ -123,6 +133,11 @@ public class RedundantNullabilityAnnotationsCheck extends IssuableSubscriptionVi
     if (symbolNullabilityData.isNullable(treeLevel, false, false) &&
       scope.equals(NULLABILITY_SCOPE.NULLABLE)) {
       reportIssue(tree, symbolNullabilityData, classNullabilityData);
+    }
+
+    // Check parameter types nullability
+    for (var paramMetadata : metadata.parametersMetadata()) {
+      checkSymbol(classNullabilityData, tree, treeLevel, paramMetadata, scope);
     }
   }
 
@@ -143,7 +158,8 @@ public class RedundantNullabilityAnnotationsCheck extends IssuableSubscriptionVi
   // track class scope nullability state during recursion
   private enum NULLABILITY_SCOPE {
     NULLABLE,
-    NON_NULLABLE
+    NON_NULLABLE,
+    UNSPECIFIED
   }
 
 }
