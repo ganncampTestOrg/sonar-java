@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,10 +30,11 @@ import org.sonar.api.batch.sensor.internal.SensorContextTester;
 import org.sonar.api.batch.sensor.measure.Measure;
 import org.sonar.api.issue.NoSonarFilter;
 import org.sonar.java.model.JavaVersionImpl;
-import org.sonar.plugins.java.api.JavaCheck;
+import org.sonar.java.telemetry.NoOpTelemetry;
 import org.sonar.plugins.java.api.JavaResourceLocator;
 
 import static org.mockito.Mockito.mock;
+import static org.sonar.java.TestUtils.mockSonarComponents;
 
 public abstract class MeasurerTester {
 
@@ -50,7 +51,7 @@ public abstract class MeasurerTester {
       .forEach(fs::add);
 
     Measurer measurer = new Measurer(context, mock(NoSonarFilter.class));
-    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), null, measurer, mock(JavaResourceLocator.class), null, new JavaCheck[0]);
+    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), mockSonarComponents(), measurer, new NoOpTelemetry(), mock(JavaResourceLocator.class), null);
     List<InputFile> files = StreamSupport.stream(fs.inputFiles().spliterator(), false).toList();
     frontend.scan(files, Collections.emptyList(), Collections.emptyList());
   }

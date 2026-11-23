@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2013-2025 SonarSource SA
+ * Copyright (C) 2013-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,8 @@ import static java.util.Collections.singletonList;
   SuppressWarningTest.class,
   SonarLintTest.class,
   ExternalReportTest.class,
-  DuplicationTest.class
+  DuplicationTest.class,
+  MultiModuleTelemetryTest.class
 })
 public class JavaTestSuite {
 
@@ -64,6 +65,8 @@ public class JavaTestSuite {
     OrchestratorRuleBuilder orchestratorBuilder = OrchestratorRule.builderEnv()
       .useDefaultAdminCredentialsForBuilds(true)
       .setSonarVersion(System.getProperty("sonar.runtimeVersion", "LATEST_RELEASE"))
+      .setEdition(com.sonar.orchestrator.container.Edition.ENTERPRISE_LW)
+      .activateLicense()
       .addPlugin(JAVA_PLUGIN_LOCATION)
       // for support of custom rules
       .addPlugin(FileLocation.of(TestUtils.pluginJar("java-extension-plugin")))
@@ -81,7 +84,8 @@ public class JavaTestSuite {
       .restoreProfileAtStartup(FileLocation.ofClasspath("/profile-package-info.xml"))
       .restoreProfileAtStartup(FileLocation.ofClasspath("/profile-suppress-warnings.xml"))
       .restoreProfileAtStartup(FileLocation.ofClasspath("/profile-suppress-warnings-pmd.xml"))
-      .restoreProfileAtStartup(FileLocation.ofClasspath("/profile-depends-on-jdk-types.xml"));
+      .restoreProfileAtStartup(FileLocation.ofClasspath("/profile-depends-on-jdk-types.xml"))
+      .restoreProfileAtStartup(FileLocation.ofClasspath("/profile-multi-module.xml"));
     ORCHESTRATOR = orchestratorBuilder.build();
   }
 

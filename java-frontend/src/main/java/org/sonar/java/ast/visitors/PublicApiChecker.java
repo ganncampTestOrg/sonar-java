@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,8 @@ public class PublicApiChecker {
     Tree.Kind.INTERFACE,
     Tree.Kind.ENUM,
     Tree.Kind.ANNOTATION_TYPE,
-    Tree.Kind.RECORD
+    Tree.Kind.RECORD,
+    Tree.Kind.IMPLICIT_CLASS
   };
 
   private static final Tree.Kind[] METHOD_KINDS = {

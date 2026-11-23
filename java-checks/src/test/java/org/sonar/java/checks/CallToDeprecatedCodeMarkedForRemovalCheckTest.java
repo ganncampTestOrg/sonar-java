@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,14 +19,14 @@ package org.sonar.java.checks;
 import org.junit.jupiter.api.Test;
 import org.sonar.java.checks.verifier.CheckVerifier;
 
-import static org.sonar.java.checks.verifier.TestUtils.nonCompilingTestSourcesPath;
+import static org.sonar.java.checks.verifier.TestUtils.mainCodeSourcesPath;
 
 class CallToDeprecatedCodeMarkedForRemovalCheckTest {
 
   @Test
   void test() {
     CheckVerifier.newVerifier()
-      .onFile(nonCompilingTestSourcesPath("checks/CallToDeprecatedCodeFlaggedForRemovalCheck_java9.java"))
+      .onFile(mainCodeSourcesPath("checks/CallToDeprecatedCodeFlaggedForRemovalCheckSample.java"))
       // 'forRemoval' introduced in java 9
       .withJavaVersion(9)
       .withCheck(new CallToDeprecatedCodeMarkedForRemovalCheck())

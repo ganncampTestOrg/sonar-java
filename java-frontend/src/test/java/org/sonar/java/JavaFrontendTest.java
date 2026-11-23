@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -16,19 +16,13 @@
  */
 package org.sonar.java;
 
-import com.google.common.io.Files;
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.annotation.Nullable;
 import org.eclipse.core.runtime.OperationCanceledException;
-import org.jetbrains.annotations.NotNull;
 import org.junit.Rule;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -57,11 +51,13 @@ import org.sonar.api.scan.issue.filter.FilterableIssue;
 import org.sonar.api.scan.issue.filter.IssueFilterChain;
 import org.sonar.api.testfixtures.log.LogTesterJUnit5;
 import org.sonar.api.utils.Version;
+import org.sonar.java.caching.CacheContextImpl;
 import org.sonar.java.classpath.ClasspathForMain;
 import org.sonar.java.classpath.ClasspathForTest;
 import org.sonar.java.exceptions.ApiMismatchException;
 import org.sonar.java.filters.SonarJavaIssueFilter;
 import org.sonar.java.model.JavaVersionImpl;
+import org.sonar.java.telemetry.NoOpTelemetry;
 import org.sonar.plugins.java.api.CheckRegistrar;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.JavaFileScanner;
@@ -84,6 +80,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.sonar.java.InputFileUtils.addFile;
+import static org.sonar.java.TestUtils.mockSonarComponents;
 
 @EnableRuleMigrationSupport
 class JavaFrontendTest {
@@ -162,7 +160,7 @@ class JavaFrontendTest {
     settings.setProperty("sonar.java.fileByFile", "true");
     scan(settings, SONARQUBE_RUNTIME, Collections.emptyList());
 
-    assertThat(logTester.logs(Level.INFO)).containsExactly(
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO))).containsExactly(
       "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
       "No \"Main\" source files to scan.",
       "No \"Test\" source files to scan.",
@@ -174,7 +172,7 @@ class JavaFrontendTest {
   void scanning_empty_project_should_be_logged_in_file_by_file_sonarlint() {
     scan(new MapSettings(), SONARLINT_RUNTIME, Collections.emptyList());
 
-    assertThat(logTester.logs(Level.INFO)).containsExactly(
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO))).containsExactly(
       "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
       "No \"Main\" source files to scan.",
       "No \"Test\" source files to scan.",
@@ -184,10 +182,10 @@ class JavaFrontendTest {
 
   @Test
   void scanning_empty_project_should_be_logged_in_batch() {
-    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), sonarComponents, new Measurer(sensorContext, mock(NoSonarFilter.class)), mock(JavaResourceLocator.class), mainCodeIssueScannerAndFilter);
+    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), mockSonarComponents(), new Measurer(sensorContext, mock(NoSonarFilter.class)), new NoOpTelemetry(), mock(JavaResourceLocator.class), mainCodeIssueScannerAndFilter);
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
 
-    assertThat(logTester.logs(Level.INFO)).containsExactly(
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO))).containsExactly(
       "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
       "No \"Main\" source files to scan.",
       "No \"Test\" source files to scan.",
@@ -220,8 +218,8 @@ class JavaFrontendTest {
 
     var hook = new Hook();
     var inputFiles = List.of(
-      addFile("class A {}", sensorContext),
-      addFile("class B {}", sensorContext)
+      addFile(temp, "class A {}", sensorContext),
+      addFile(temp, "class B {}", sensorContext)
     );
     scan(settings, SONARLINT_RUNTIME, inputFiles, new CheckRegistrar[]{hook});
     assertThat(hook.callCount).isEqualTo(2);
@@ -233,7 +231,7 @@ class JavaFrontendTest {
     settings.setProperty("sonar.internal.analysis.autoscan", "true");
     scan(settings, SONARQUBE_RUNTIME, Collections.emptyList());
 
-    assertThat(logTester.logs(Level.INFO)).containsExactly(
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO))).containsExactly(
       "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
       "No \"Main and Test\" source files to scan."
     );
@@ -256,13 +254,14 @@ class JavaFrontendTest {
     JavaFrontend frontend = new JavaFrontend(
       new JavaVersionImpl(),
       specificSonarComponents,
-      null,
+      mock(Measurer.class),
+      new NoOpTelemetry(),
       mock(JavaResourceLocator.class),
       mainCodeIssueScannerAndFilter
     );
 
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-    assertThat(logTester.logs(Level.INFO))
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO)))
       .isNotEmpty()
       .containsExactly(
         "Server-side caching is enabled. The Java analyzer was able to leverage cached data from previous analyses for 0 out of 0 files. These files will not be parsed.",
@@ -289,13 +288,14 @@ class JavaFrontendTest {
     JavaFrontend frontend = new JavaFrontend(
       new JavaVersionImpl(),
       specificSonarComponents,
-      null,
+      mock(Measurer.class),
+      new NoOpTelemetry(),
       mock(JavaResourceLocator.class),
       mainCodeIssueScannerAndFilter
     );
 
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-    assertThat(logTester.logs(Level.INFO))
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO)))
       .isNotEmpty()
       .containsExactly(
         "Server-side caching is enabled. The Java analyzer will not try to leverage data from a previous analysis.",
@@ -322,13 +322,14 @@ class JavaFrontendTest {
     JavaFrontend frontend = new JavaFrontend(
       new JavaVersionImpl(),
       specificSonarComponents,
-      null,
+      mock(Measurer.class),
+      new NoOpTelemetry(),
       mock(JavaResourceLocator.class),
       mainCodeIssueScannerAndFilter
     );
 
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-    assertThat(logTester.logs(Level.INFO))
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO)))
       .isNotEmpty()
       .containsExactly(
         "Server-side caching is enabled. The Java analyzer will not try to leverage data from a previous analysis.",
@@ -354,13 +355,14 @@ class JavaFrontendTest {
     JavaFrontend frontend = new JavaFrontend(
       new JavaVersionImpl(),
       specificSonarComponents,
-      null,
+      mock(Measurer.class),
+      new NoOpTelemetry(),
       mock(JavaResourceLocator.class),
       mainCodeIssueScannerAndFilter
     );
 
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-    assertThat(logTester.logs(Level.INFO))
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO)))
       .isNotEmpty()
       .containsExactly(
         "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
@@ -386,13 +388,14 @@ class JavaFrontendTest {
     JavaFrontend frontend = new JavaFrontend(
       new JavaVersionImpl(),
       specificSonarComponents,
-      null,
+      mock(Measurer.class),
+      new NoOpTelemetry(),
       mock(JavaResourceLocator.class),
       mainCodeIssueScannerAndFilter
     );
 
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-    assertThat(logTester.logs(Level.INFO))
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO)))
       .isNotEmpty()
       .containsExactly(
         "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
@@ -410,14 +413,15 @@ class JavaFrontendTest {
 
     JavaFrontend frontend = new JavaFrontend(
       new JavaVersionImpl(),
-      null,
-      null,
+      mockSonarComponents(),
+      mock(Measurer.class),
+      new NoOpTelemetry(),
       mock(JavaResourceLocator.class),
       mainCodeIssueScannerAndFilter
     );
 
     frontend.scan(Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-    assertThat(logTester.logs(Level.INFO))
+    assertThat(filterOutAnalysisProgress(logTester.logs(Level.INFO)))
       .isNotEmpty()
       .containsExactly(
         "Server-side caching is not enabled. The Java analyzer will not try to leverage data from a previous analysis.",
@@ -427,13 +431,22 @@ class JavaFrontendTest {
       );
   }
 
+  private static List<String> filterOutAnalysisProgress(List<String> logs) {
+    return logs.stream().filter(str -> !str.matches("\\d+% analyzed")).toList();
+  }
+
+  /**
+   * Ensure that changes the mock, which may be needed when it is shared with other tests,
+   * do not affect JavaFrontendTest.
+   */
   @Test
-  void test_getters_with_null_sonarComponents() {
-    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), null, new Measurer(sensorContext, mock(NoSonarFilter.class)), mock(JavaResourceLocator.class), mainCodeIssueScannerAndFilter);
-    assertThat(frontend.isAutoScan()).isFalse();
-    assertThat(frontend.isFileByFileEnabled()).isFalse();
-    assertThat(frontend.analysisCancelled()).isFalse();
-    assertThat(frontend.getBatchModeSizeInKB()).isEqualTo(-1L);
+  void test_validate_mockSonarComponents() {
+    SonarComponents mock = mockSonarComponents();
+    assertThat(mock.isAutoScan()).isFalse();
+    assertThat(mock.isFileByFileEnabled()).isFalse();
+    assertThat(mock.analysisCancelled()).isFalse();
+    assertThat(mock.getBatchModeSizeInKB()).isEqualTo(-1L);
+    assertThat(CacheContextImpl.of(mock).isCacheEnabled()).isFalse();
   }
 
   @Test
@@ -720,100 +733,6 @@ class JavaFrontendTest {
   }
 
   @Test
-  void batch_generator_returns_an_empty_list_when_no_input_files() {
-    List<InputFile> emptyList = Collections.emptyList();
-    JavaFrontend.BatchGenerator generator = new JavaFrontend.BatchGenerator(emptyList.iterator(), 0);
-    assertThat(generator.hasNext()).isFalse();
-    assertThat(generator.next()).isEmpty();
-  }
-
-  @Test
-  void batch_generator_returns_at_most_one_item_per_batch_when_size_is_zero() throws IOException {
-    if (sensorContext == null) {
-      File baseDir = temp.getRoot().getAbsoluteFile();
-      sensorContext = SensorContextTester.create(baseDir);
-      sensorContext.setSettings(new MapSettings());
-    }
-    List<InputFile> inputFiles = new ArrayList<>();
-    inputFiles.add(addFile("class A {}", sensorContext));
-    inputFiles.add(addFile("class B extends A {}", sensorContext));
-    JavaFrontend.BatchGenerator generator = new JavaFrontend.BatchGenerator(inputFiles.iterator(), 0);
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next())
-      .hasSize(1)
-      .contains(inputFiles.get(0));
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next())
-      .hasSize(1)
-      .contains(inputFiles.get(1));
-    assertThat(generator.hasNext()).isFalse();
-    assertThat(generator.next()).isEmpty();
-  }
-
-  @Test
-  void batch_generator_returns_batches_with_multiple_files_that_are_smaller_than_batch_size() throws IOException {
-    if (sensorContext == null) {
-      File baseDir = temp.getRoot().getAbsoluteFile();
-      sensorContext = SensorContextTester.create(baseDir);
-      sensorContext.setSettings(new MapSettings());
-    }
-    InputFile fileA = addFile("class A { public void doSomething() {} }", sensorContext);
-    InputFile fileB = addFile("class B extends A {}", sensorContext);
-    InputFile fileC = addFile("class C {}", sensorContext);
-
-    long sizeofA = fileA.file().length() + 1;
-    JavaFrontend.BatchGenerator generator = new JavaFrontend.BatchGenerator(
-      Arrays.asList(fileA, fileB, fileC).iterator(), sizeofA
-    );
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next()).hasSize(1).contains(fileA);
-    assertThat(generator.hasNext()).isTrue();
-    List<InputFile> batchWithMultipleFiles = generator.next();
-    assertThat(batchWithMultipleFiles).hasSize(2).contains(fileB).contains(fileC);
-    long batchSize = batchWithMultipleFiles.stream().map(i -> i.file().length()).reduce(0L, Long::sum);
-    assertThat(batchSize).isLessThanOrEqualTo(sizeofA);
-    assertThat(generator.hasNext()).isFalse();
-    assertThat(generator.next()).isEmpty();
-
-    long sizeOfAPlusB = fileA.file().length() + fileB.file().length();
-    generator = new JavaFrontend.BatchGenerator(
-      Arrays.asList(fileA, fileB, fileC).iterator(), sizeOfAPlusB
-    );
-    assertThat(generator.hasNext()).isTrue();
-    batchWithMultipleFiles = generator.next();
-    assertThat(batchWithMultipleFiles).hasSize(2).contains(fileA).contains(fileB);
-    batchSize = batchWithMultipleFiles.stream().map(i -> i.file().length()).reduce(0L, Long::sum);
-    assertThat(batchSize).isLessThanOrEqualTo(sizeOfAPlusB);
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next()).hasSize(1).contains(fileC);
-    assertThat(generator.hasNext()).isFalse();
-    assertThat(generator.next()).isEmpty();
-  }
-
-  @Test
-  void batch_generator_includes_file_excluded_from_previous_batch_into_next_batch() throws IOException {
-    if (sensorContext == null) {
-      File baseDir = temp.getRoot().getAbsoluteFile();
-      sensorContext = SensorContextTester.create(baseDir);
-      sensorContext.setSettings(new MapSettings());
-    }
-    InputFile fileA = addFile("class A { public void doSomething() {} }", sensorContext);
-    InputFile fileB = addFile("class B extends A {}", sensorContext);
-    InputFile fileC = addFile("class C {}", sensorContext);
-    JavaFrontend.BatchGenerator generator = new JavaFrontend.BatchGenerator(
-      Arrays.asList(fileA, fileC, fileB).iterator(), fileC.file().length()
-    );
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next()).hasSize(1).contains(fileA);
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next()).hasSize(1).contains(fileC);
-    assertThat(generator.hasNext()).isTrue();
-    assertThat(generator.next()).hasSize(1).contains(fileB);
-    assertThat(generator.hasNext()).isFalse();
-    assertThat(generator.next()).isEmpty();
-  }
-
-  @Test
   void sonar_java_ignoreUnnamedModuleForSplitPackage_is_logged_at_debug_level_when_enabled() throws IOException {
     MapSettings settings = new MapSettings();
     settings.setProperty("sonar.java.ignoreUnnamedModuleForSplitPackage", "false");
@@ -838,7 +757,7 @@ class JavaFrontendTest {
     }
     List<InputFile> inputFiles = new ArrayList<>();
     for (String code : codeList) {
-      inputFiles.add(addFile(code, sensorContext));
+      inputFiles.add(addFile(temp, code, sensorContext));
     }
     return scan(settings, sonarRuntime, inputFiles);
   }
@@ -870,32 +789,16 @@ class JavaFrontendTest {
     JavaVersion javaVersion = settings.asConfig().get(JavaVersion.SOURCE_VERSION)
       .map(JavaVersionImpl::fromString)
       .orElse(new JavaVersionImpl());
-    JavaFrontend frontend = new JavaFrontend(javaVersion, sonarComponents, new Measurer(sensorContext, mock(NoSonarFilter.class)), mock(JavaResourceLocator.class),
-      null, sonarComponents.mainChecks().toArray(new JavaCheck[0]));
+    JavaFrontend frontend = new JavaFrontend(javaVersion,
+      sonarComponents,
+      new Measurer(sensorContext, mock(NoSonarFilter.class)),
+      new NoOpTelemetry(),
+      mock(JavaResourceLocator.class),
+      null,
+      sonarComponents.mainChecks().toArray(new JavaCheck[0]));
     frontend.scan(inputFiles, Collections.emptyList(), Collections.emptyList());
 
     return inputFiles;
-  }
-
-  private InputFile addFile(String code, SensorContextTester context) throws IOException {
-    Matcher matcher = Pattern.compile("(?:^|\\s)(?:class|interface|enum|record)\\s++(\\w++)").matcher(code);
-    if (matcher.find()) {
-      String className = matcher.group(1);
-      InputFile.Type type = className.endsWith("Test") ? InputFile.Type.TEST : InputFile.Type.MAIN;
-      File file = temp.newFile(className + ".java").getAbsoluteFile();
-      return generateInputFile(code, context, file, type);
-    } else {
-      File file = temp.newFile("Unnamed.java").getAbsoluteFile();
-      return generateInputFile(code, context, file, InputFile.Type.MAIN);
-    }
-  }
-
-  @NotNull
-  private static InputFile generateInputFile(String code, SensorContextTester context, File file, InputFile.Type type) throws IOException {
-    Files.asCharSink(file, StandardCharsets.UTF_8).write(code);
-    InputFile defaultFile = TestUtils.inputFile(context.fileSystem().baseDir().getAbsolutePath(), file, type);
-    context.fileSystem().add(defaultFile);
-    return defaultFile;
   }
 
   private class TestIssueFilter implements JavaFileScanner, SonarJavaIssueFilter, EndOfAnalysis {

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2013-2025 SonarSource SA
+ * Copyright (C) 2013-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -63,6 +63,8 @@ public class AutoScanTest {
 
   @ClassRule
   public static OrchestratorRule orchestrator = OrchestratorRule.builderEnv()
+    .setEdition(com.sonar.orchestrator.container.Edition.ENTERPRISE_LW)
+    .activateLicense()
     .useDefaultAdminCredentialsForBuilds(true)
     .setSonarVersion(System.getProperty("sonar.runtimeVersion", "LATEST_RELEASE"))
     .addPlugin(FileLocation.of(TestClasspathUtils.findModuleJarPath("../../sonar-java-plugin").toFile()))
@@ -93,6 +95,7 @@ public class AutoScanTest {
     String correctConfigIssues = absolutePathFor(TARGET_ACTUAL + PROJECT_KEY + "-mvn");
 
     MavenBuild mavenBuild = MavenBuild.create()
+      .setProperty("sonar.scanner.skipJreProvisioning", "true")
       .setPom(FileLocation.of(PROJECT_LOCATION + "pom.xml").getFile().getCanonicalFile())
       .addSonarGoal()
       .addArgument("-DskipTests")
@@ -115,13 +118,14 @@ public class AutoScanTest {
      * 2. Execute the analysis as sonar-scanner project, without any bytecode nor dependencies/libraries
      */
     SonarScanner sonarScannerBuild = SonarScanner.create(FileLocation.of(PROJECT_LOCATION).getFile())
+      .setProperty("sonar.scanner.skipJreProvisioning", "true")
       .setProjectKey(PROJECT_KEY)
       .setProjectName(PROJECT_NAME)
       .setProjectVersion("0.1.0-SNAPSHOT")
       .setSourceEncoding("UTF-8")
       .setSourceDirs("aws/src/main/java/,default/src/main/java/,java-17/src/main/java/,spring-3.2/src/main/java/,spring-web-4.0/src/main/java/")
-      .setTestDirs("default/src/test/java/,test-classpath-reader/src/test/java")
-      .setProperty("sonar.java.source", "23")
+      .setTestDirs("default/src/test/java/,java-17/src/test/java/,test-classpath-reader/src/test/java")
+      .setProperty("sonar.java.source", "25")
       // common properties
       .setProperty("sonar.cpd.exclusions", "**/*")
       .setProperty("sonar.skipPackageDesign", "true")
@@ -194,8 +198,8 @@ public class AutoScanTest {
     SoftAssertions softly = new SoftAssertions();
     softly.assertThat(newDiffs).containsExactlyInAnyOrderElementsOf(knownDiffs.values());
     softly.assertThat(newTotal).isEqualTo(knownTotal);
-    softly.assertThat(rulesCausingFPs).hasSize(9);
-    softly.assertThat(rulesNotReporting).hasSize(12);
+    softly.assertThat(rulesCausingFPs).hasSize(10);
+    softly.assertThat(rulesNotReporting).hasSize(14);
 
     /**
      * 4. Check total number of differences (FPs + FNs)

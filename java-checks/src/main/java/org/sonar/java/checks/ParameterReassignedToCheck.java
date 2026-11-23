@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -77,7 +77,7 @@ public class ParameterReassignedToCheck extends BaseTreeVisitor implements JavaF
 
   @Override
   public void visitCatch(CatchTree tree) {
-    CFG cfg = CFG.buildCFG(tree.block().body(), true);
+    CFG cfg = CFG.buildCFG(tree.block().body());
     Symbol variable = tree.parameter().symbol();
     boolean liveVar = true;
     if(variable.owner().isMethodSymbol()) {
@@ -97,7 +97,7 @@ public class ParameterReassignedToCheck extends BaseTreeVisitor implements JavaF
 
   @Override
   public void visitForEachStatement(ForEachStatement tree) {
-    CFG cfg = CFG.buildCFG(Collections.singletonList(tree), true);
+    CFG cfg = CFG.buildCFG(Collections.singletonList(tree));
     Symbol variable = tree.variable().symbol();
     boolean liveVar = true;
     if(variable.owner().isMethodSymbol()) {

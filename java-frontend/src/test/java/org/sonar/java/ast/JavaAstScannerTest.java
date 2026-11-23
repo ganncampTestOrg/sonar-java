@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,10 +29,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.event.Level;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.fs.internal.DefaultFileSystem;
+import org.sonar.api.batch.fs.internal.TestInputFileBuilder;
 import org.sonar.api.batch.sensor.internal.SensorContextTester;
 import org.sonar.api.config.internal.MapSettings;
 import org.sonar.api.issue.NoSonarFilter;
@@ -52,10 +54,10 @@ import org.sonar.java.model.JavaTree;
 import org.sonar.java.model.JavaVersionImpl;
 import org.sonar.java.model.VisitorsBridge;
 import org.sonar.java.model.declaration.ClassTreeImpl;
-import org.sonar.java.model.declaration.MethodTreeImpl;
 import org.sonar.java.model.expression.IdentifierTreeImpl;
-import org.sonar.java.model.statement.BlockTreeImpl;
 import org.sonar.java.notchecks.VisitorNotInChecksPackage;
+import org.sonar.java.telemetry.NoOpTelemetry;
+import org.sonar.java.telemetry.TelemetryKey;
 import org.sonar.java.testing.ThreadLocalLogTester;
 import org.sonar.plugins.java.api.JavaFileScanner;
 import org.sonar.plugins.java.api.JavaFileScannerContext;
@@ -64,6 +66,7 @@ import org.sonar.plugins.java.api.internal.EndOfAnalysis;
 import org.sonar.plugins.java.api.tree.CompilationUnitTree;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -79,6 +82,11 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class JavaAstScannerTest {
+
+  public static final InputFile TRIVIAL_COMPILATION_UNIT = TestUtils.inputFile("src/test/resources/AstScannerNoParseError.txt");
+  public static final JavaFileScanner PROBLEMATIC_VISITOR = ctx -> {
+    throw new StackOverflowError();
+  };
 
   @RegisterExtension
   public ThreadLocalLogTester logTester = new ThreadLocalLogTester().setLevel(Level.DEBUG);
@@ -153,7 +161,7 @@ class JavaAstScannerTest {
   @Test
   void should_not_fail_whole_analysis_upon_parse_error_and_notify_audit_listeners() {
     FakeAuditListener listener = spy(new FakeAuditListener());
-    JavaAstScanner scanner = new JavaAstScanner(null);
+    JavaAstScanner scanner = new JavaAstScanner(null, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     scanner.setVisitorBridge(new VisitorsBridge(listener));
 
     scanner.scan(Collections.singletonList(TestUtils.inputFile("src/test/resources/AstScannerParseError.txt")));
@@ -185,9 +193,10 @@ class JavaAstScannerTest {
   @Test
   void test_do_not_log_fail_parsing_with_incorrect_version() {
     scanWithJavaVersion(8, Collections.singletonList(TestUtils.inputFile("src/test/files/metrics/Java15SwitchExpression.java")));
-    // read test: ecj_does_not_raise_problems_on_non_compiling_switch_expression
-    // to understand why logTester.logs(Level.ERROR) is empty
-    assertThat(logTester.logs(Level.ERROR)).isEmpty();
+    assertThat(logTester.logs(Level.ERROR))
+      .containsExactlyInAnyOrder(
+        "Unable to parse source file : 'src/test/files/metrics/Java15SwitchExpression.java'",
+        "Parse error at line 3 column 13: Switch Expressions are supported from Java 14 onwards only");
   }
 
   @Test
@@ -204,23 +213,18 @@ class JavaAstScannerTest {
         }
       }
       """;
+    JavaVersionImpl oldJavaVersionThatDoesNotSupportSwitchExpressions = new JavaVersionImpl(8);
+
     // BUG in ECJ 3.41: When the Java source version is 8, ECJ incorrectly does not report errors for switch expressions (introduced in later Java versions).
+    // But now the bug has been fixed in ECJ 3.42, so the following code throws a RecognitionException as expected.
+    assertThatThrownBy(() -> JParserTestUtils.parse(source, oldJavaVersionThatDoesNotSupportSwitchExpressions))
+      .isInstanceOf(RecognitionException.class)
+      .hasMessage("Parse error at line 4 column 13: Switch Expressions are supported from Java 14 onwards only");
     // Affected tests:
     // - module_info_should_not_be_analyzed_or_change_the_version
     // - remove_info_ro_warning_log_related_to_module_info
     // - test_should_log_fail_parsing_with_incorrect_version
     // Once the ECJ bug is fixed, these tests should be updated to expect logging error.
-
-    // JParserTestUtils.parse throw an error in case of non compiling code, as java source version is 8
-    // JParserTestUtils.parse should throw an error
-    assertDoesNotThrow(()->{
-      var cu = (JavaTree.CompilationUnitTreeImpl) JParserTestUtils.parse(source, new JavaVersionImpl(8));
-      var clazz = (ClassTreeImpl) cu.types().get(0);
-      var method = (MethodTreeImpl) clazz.members().get(0);
-      var block = (BlockTreeImpl) method.block();
-      // The only consequence of the non-compiling code is that the block is empty
-      assertThat(block.body()).isEmpty();
-    });
   }
 
   @ParameterizedTest
@@ -274,7 +278,7 @@ class JavaAstScannerTest {
 
   @Test
   void should_swallow_log_and_report_checks_exceptions() {
-    JavaAstScanner scanner = new JavaAstScanner(null);
+    JavaAstScanner scanner = new JavaAstScanner(null, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     SonarComponents sonarComponent = new SonarComponents(null, context.fileSystem(), null, null, null, null);
     sonarComponent.setSensorContext(context);
     scanner.setVisitorBridge(new VisitorsBridge(Collections.singleton(new CheckThrowingException(new NullPointerException("foo"))), new ArrayList<>(), sonarComponent));
@@ -295,7 +299,7 @@ class JavaAstScannerTest {
 
   @Test
   void should_propagate_SOError() {
-    JavaAstScanner scanner = new JavaAstScanner(null);
+    JavaAstScanner scanner = new JavaAstScanner(null, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     scanner.setVisitorBridge(new VisitorsBridge(new CheckThrowingSOError()));
     List<InputFile> files = Collections.singletonList(TestUtils.inputFile("src/test/resources/AstScannerNoParseError.txt"));
     try {
@@ -323,9 +327,10 @@ class JavaAstScannerTest {
     List<String> filteredLogs = TestUtils.filterOutAnalysisProgressLogLines(logs);
     assertThat(filteredLogs).contains("1/1 source file has been analyzed");
     assertThat(filteredLogs.size()).isBetween(3,4);
-    // read test: ecj_does_not_raise_problems_on_non_compiling_switch_expression
-    // to understand why logTester.logs(Level.ERROR) is empty
-    assertThat(logTester.logs(Level.ERROR)).isEmpty();
+    assertThat(logTester.logs(Level.ERROR))
+      .containsExactlyInAnyOrder(
+        "Unable to parse source file : 'src/test/files/metrics/Java15SwitchExpression.java'",
+        "Parse error at line 3 column 13: Switch Expressions are supported from Java 14 onwards only");
     assertThat(logTester.logs(Level.WARN))
       // two files, only one log
       .hasSize(1)
@@ -345,9 +350,10 @@ class JavaAstScannerTest {
       ));
     assertThat(logTester.logs(Level.INFO)).isEmpty();
     assertThat(logTester.logs(Level.WARN)).isEmpty();
-    // read test: ecj_does_not_raise_problems_on_non_compiling_switch_expression
-    // to understand why logTester.logs(Level.ERROR) is empty
-    assertThat(logTester.logs(Level.ERROR)).isEmpty();
+    assertThat(logTester.logs(Level.ERROR))
+          .containsExactlyInAnyOrder(
+            "Unable to parse source file : 'src/test/files/metrics/Java15SwitchExpression.java'",
+            "Parse error at line 3 column 13: Switch Expressions are supported from Java 14 onwards only");
   }
 
   @Test
@@ -375,7 +381,7 @@ class JavaAstScannerTest {
 
   @Test
   void should_report_analysis_error_in_sonarLint_context_withSQ_6_0() {
-    JavaAstScanner scanner = new JavaAstScanner(null);
+    JavaAstScanner scanner = new JavaAstScanner(null, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     FakeAuditListener listener = spy(new FakeAuditListener());
     SonarComponents sonarComponents = mock(SonarComponents.class);
     when(sonarComponents.reportAnalysisError(any(RecognitionException.class), any(InputFile.class))).thenReturn(true);
@@ -390,7 +396,7 @@ class JavaAstScannerTest {
     SonarComponents sonarComponents = mock(SonarComponents.class);
     doReturn(true).when(sonarComponents).canSkipUnchangedFiles();
     doReturn(true).when(sonarComponents).fileCanBeSkipped(any());
-    JavaAstScanner jas = new JavaAstScanner(sonarComponents);
+    JavaAstScanner jas = new JavaAstScanner(sonarComponents, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
 
     VisitorThatCanBeSkipped skippable = spy(new VisitorThatCanBeSkipped());
     VisitorNotInChecksPackage unskippable = spy(new VisitorNotInChecksPackage());
@@ -401,7 +407,7 @@ class JavaAstScannerTest {
     );
     jas.setVisitorBridge(visitorsBridge);
 
-    InputFile inputFile = mock(InputFile.class);
+    InputFile inputFile = new TestInputFileBuilder("class A {}", "file.java").build();
     jas.simpleScan(inputFile, mock(JParserConfig.Result.class), ignored -> {});
 
     verify(skippable, never()).visitNode(any());
@@ -413,7 +419,7 @@ class JavaAstScannerTest {
     SonarComponents sonarComponents = mock(SonarComponents.class);
     VisitorsBridge visitorsBridge = mock(VisitorsBridge.class);
     doReturn(false).when(visitorsBridge).scanWithoutParsing(any());
-    JavaAstScanner javaAstScanner = new JavaAstScanner(sonarComponents);
+    JavaAstScanner javaAstScanner = new JavaAstScanner(sonarComponents, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     javaAstScanner.setVisitorBridge(visitorsBridge);
 
     Map<Boolean, List<InputFile>> expectedEmpty = Map.of(
@@ -440,7 +446,7 @@ class JavaAstScannerTest {
     doReturn(true).when(visitorsBridge).scanWithoutParsing(any());
     doReturn(false).when(visitorsBridge).scanWithoutParsing(unsuccessful);
 
-    JavaAstScanner javaAstScanner = new JavaAstScanner(mock(SonarComponents.class));
+    JavaAstScanner javaAstScanner = new JavaAstScanner(mock(SonarComponents.class), new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     javaAstScanner.setVisitorBridge(visitorsBridge);
 
     Map<Boolean, List<InputFile>> actual = javaAstScanner.scanWithoutParsing(files);
@@ -451,7 +457,6 @@ class JavaAstScannerTest {
 
   @Test
   void test_modifyCompilationUnit_modify_ast() {
-    InputFile trivialCompilationUnit = TestUtils.inputFile("src/test/resources/AstScannerNoParseError.txt");
 
     var check = new JavaFileScanner() {
       @Override
@@ -467,9 +472,9 @@ class JavaAstScannerTest {
       Collections.emptyList(),
       null);
 
-    JavaAstScanner scanner = new JavaAstScanner(null);
+    JavaAstScanner scanner = new JavaAstScanner(null, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     scanner.setVisitorBridge(visitorsBridge);
-    scanner.scanForTesting(Collections.singletonList(trivialCompilationUnit), compilationUnit -> {
+    scanner.scanForTesting(Collections.singletonList(TRIVIAL_COMPILATION_UNIT), compilationUnit -> {
       var clazz = (ClassTreeImpl) ((JavaTree.CompilationUnitTreeImpl) compilationUnit).types().get(0);
       assertThat(clazz.simpleName().name()).isEqualTo("C");
       assertThat(clazz.simpleName().symbol().isUnknown()).isFalse();
@@ -477,6 +482,59 @@ class JavaAstScannerTest {
       identifierTree.binding = null;
     });
 
+  }
+
+  @Test
+  void test_should_fail_on_stackoverflow_by_default() {
+    var files = List.of(TRIVIAL_COMPILATION_UNIT);
+    List<JavaFileScanner> visitors = List.of(PROBLEMATIC_VISITOR);
+
+    // Assert that by default, StackOverflowError is propagated
+    var emptySettings = new MapSettings();
+    assertThrows(StackOverflowError.class, () -> scanFilesWithVisitorsAndContext(files, visitors, emptySettings));
+  }
+
+  @Test
+  void test_should_not_fail_on_stackoverflow_when_set() {
+    // Assert that when configured to not fail on exception, StackOverflowError is swallowed, but logged
+    MapSettings settings = new MapSettings().setProperty(SonarComponents.SONAR_FAIL_ON_STACKOVERFLOW, false);
+    assertDoesNotThrow(() -> scanFilesWithVisitorsAndContext(List.of(TRIVIAL_COMPILATION_UNIT), List.of(PROBLEMATIC_VISITOR), settings));
+    assertThat(logTester.logs(Level.ERROR))
+      .containsExactly("A stack overflow error occurred while analyzing file: 'src/test/resources/AstScannerNoParseError.txt'");
+  }
+
+  @ParameterizedTest
+  @MethodSource("failFastAndFailOnStackOverflowCombinations")
+  void assertFailFastWithFailOnStackOverflowInteraction(boolean failFast, boolean failOnSO, boolean shouldFail) {
+    MapSettings settings = new MapSettings()
+      .setProperty(SonarComponents.FAIL_ON_EXCEPTION_KEY, failFast)
+      .setProperty(SonarComponents.SONAR_FAIL_ON_STACKOVERFLOW, failOnSO);
+    var files = List.of(TRIVIAL_COMPILATION_UNIT);
+    List<JavaFileScanner> visitors = List.of(PROBLEMATIC_VISITOR);
+
+    if (shouldFail) {
+      assertThrows(StackOverflowError.class, () -> scanFilesWithVisitorsAndContext(files, visitors, settings));
+    } else {
+      assertDoesNotThrow(() -> scanFilesWithVisitorsAndContext(files, visitors, settings));
+    }
+  }
+
+  static List<Object[]> failFastAndFailOnStackOverflowCombinations() {
+    return Arrays.asList(new Object[][]{
+      {true, true, true},
+      {true, false, false},
+      {false, true, true},
+      {false, false, false}
+    });
+  }
+
+  @Test
+  void test_should_fail_on_stackoverflow_when_sonar_components_null() {
+    var files = List.of(TRIVIAL_COMPILATION_UNIT);
+    JavaAstScanner scanner = new JavaAstScanner(null, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
+    VisitorsBridge visitorBridge = new VisitorsBridge(PROBLEMATIC_VISITOR);
+    scanner.setVisitorBridge(visitorBridge);
+    assertThrows(StackOverflowError.class, () -> scanner.scan(files));
   }
 
   private void scanSingleFile(InputFile file, boolean failOnException) {
@@ -502,19 +560,27 @@ class JavaAstScannerTest {
   }
 
   private void scanFilesWithVisitors(List<InputFile> inputFiles, List<JavaFileScanner> visitors,
-                                     int javaVersion, boolean failOnException, boolean autoscanMode) {
-    context.setSettings(new MapSettings()
+    int javaVersion, boolean failOnException, boolean autoscanMode) {
+    MapSettings settings = new MapSettings()
       .setProperty(SonarComponents.FAIL_ON_EXCEPTION_KEY, failOnException)
-      .setProperty(SonarComponents.SONAR_AUTOSCAN, autoscanMode)
-    );
+      .setProperty(SonarComponents.SONAR_AUTOSCAN, autoscanMode);
 
+    scanFilesWithVisitorsAndContext(inputFiles, visitors, settings, javaVersion);
+  }
+
+  private void scanFilesWithVisitorsAndContext(List<InputFile> inputFiles, List<JavaFileScanner> visitors, MapSettings contextMap) {
+    scanFilesWithVisitorsAndContext(inputFiles, visitors, contextMap, JavaVersionImpl.MAX_SUPPORTED);
+  }
+
+  private void scanFilesWithVisitorsAndContext(List<InputFile> inputFiles, List<JavaFileScanner> visitors, MapSettings contextMap, int javaVersion) {
+    context.setSettings(contextMap);
     DefaultFileSystem fileSystem = context.fileSystem();
     ClasspathForMain classpathForMain = new ClasspathForMain(context.config(), fileSystem);
     ClasspathForTest classpathForTest = new ClasspathForTest(context.config(), fileSystem);
     SonarComponents sonarComponents = new SonarComponents(null, fileSystem, classpathForMain, classpathForTest, null, null);
     sonarComponents.setSensorContext(context);
-    JavaAstScanner scanner = new JavaAstScanner(sonarComponents);
-    VisitorsBridge visitorBridge = new VisitorsBridge(visitors, new ArrayList<>(), sonarComponents, new JavaVersionImpl(javaVersion));
+    JavaAstScanner scanner = new JavaAstScanner(sonarComponents, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
+    VisitorsBridge visitorBridge = new VisitorsBridge(visitors, List.of(), sonarComponents, new JavaVersionImpl(javaVersion));
     scanner.setVisitorBridge(visitorBridge);
     scanner.scan(inputFiles);
   }

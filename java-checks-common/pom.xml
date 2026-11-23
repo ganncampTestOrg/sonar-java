@@ -5,12 +5,13 @@
   <parent>
     <groupId>org.sonarsource.java</groupId>
     <artifactId>java</artifactId>
-    <version>8.16.0-SNAPSHOT</version>
+    <version>8.24.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>java-checks-common</artifactId>
 
   <name>SonarQube Java :: Checks Common</name>
+  <description>Code Analyzer for Java :: Common utilities for analyzer's checks</description>
 
   <dependencies>
     <dependency>

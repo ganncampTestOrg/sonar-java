@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,7 +34,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 final class JTypeSymbol extends JSymbol implements Symbol.TypeSymbol {
@@ -109,7 +108,8 @@ final class JTypeSymbol extends JSymbol implements Symbol.TypeSymbol {
   @CheckForNull
   private Type convertSuperClass() {
     if (typeBinding().isInterface() || typeBinding().isArray()) {
-      return sema.type(Objects.requireNonNull(sema.resolveType("java.lang.Object")));
+      ITypeBinding objectBinding = sema.resolveType("java.lang.Object");
+      return objectBinding != null ? sema.type(objectBinding) : Type.UNKNOWN;
     } else if (typeBinding().getSuperclass() == null) {
       // java.lang.Object
       return null;

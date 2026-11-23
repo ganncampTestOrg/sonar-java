@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,9 +17,6 @@
 package org.sonar.java.checks.verifier.internal;
 
 import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,12 +47,13 @@ import org.sonar.java.caching.DummyCache;
 import org.sonar.java.caching.JavaReadCacheImpl;
 import org.sonar.java.caching.JavaWriteCacheImpl;
 import org.sonar.java.checks.verifier.CheckVerifier;
-import org.sonar.java.checks.verifier.FilesUtils;
 import org.sonar.java.model.JavaVersionImpl;
 import org.sonar.java.reporting.AnalyzerMessage;
 import org.sonar.java.reporting.AnalyzerMessage.TextSpan;
 import org.sonar.java.reporting.JavaQuickFix;
 import org.sonar.java.reporting.JavaTextEdit;
+import org.sonar.java.telemetry.NoOpTelemetry;
+import org.sonar.java.telemetry.TelemetryKey;
 import org.sonar.java.test.classpath.TestClasspathUtils;
 import org.sonar.java.testing.JavaFileScannerContextForTests;
 import org.sonar.java.testing.VisitorsBridgeForTests;
@@ -79,14 +77,6 @@ import static org.sonar.java.checks.verifier.internal.Expectations.IssueAttribut
 public class InternalCheckVerifier implements CheckVerifier {
 
   private static final JavaVersion DEFAULT_JAVA_VERSION = new JavaVersionImpl();
-  private static final List<File> DEFAULT_CLASSPATH;
-
-  static {
-    Path path = Paths.get(FilesUtils.DEFAULT_TEST_CLASSPATH_FILE.replace('/', File.separatorChar));
-    // Because of 'java-custom-rules-example' module, we silently use an empty classpath if the file does not exist
-    DEFAULT_CLASSPATH = Files.exists(path) ? TestClasspathUtils.loadFromFile(path.toString()) : new ArrayList<>();
-    Optional.of(new File(FilesUtils.DEFAULT_TEST_CLASSES_DIRECTORY)).filter(File::exists).ifPresent(DEFAULT_CLASSPATH::add);
-  }
 
   private boolean withoutSemantic = false;
 
@@ -136,6 +126,16 @@ public class InternalCheckVerifier implements CheckVerifier {
     return this;
   }
 
+  @Override
+  public CheckVerifier addJarsToClasspath(String... jarsToAdd) {
+    throw new UnsupportedOperationException("Not implemented!");
+  }
+
+  @Override
+  public CheckVerifier removeJarsFromClasspath(String... jarsToRemove) {
+    throw new UnsupportedOperationException("Not implemented!");
+  }
+
   @Beta
   public InternalCheckVerifier withCustomIssueVerifier(Consumer<Set<AnalyzerMessage>> customIssueVerifier) {
     requiresNull(this.customIssueVerifier, "custom issue verifier");
@@ -155,7 +155,7 @@ public class InternalCheckVerifier implements CheckVerifier {
     requiresNull(javaVersion, "java version");
     return withJavaVersion(javaVersionAsInt, false);
   }
-  
+
   @Override
   public InternalCheckVerifier withJavaVersion(int javaVersionAsInt, boolean enablePreviewFeatures) {
     requiresNull(javaVersion, "java version");
@@ -163,8 +163,7 @@ public class InternalCheckVerifier implements CheckVerifier {
       var message = String.format(
         "Preview features can only be enabled when the version == latest supported Java version (%d != %d)",
         javaVersionAsInt,
-        JavaVersionImpl.MAX_SUPPORTED
-      );
+        JavaVersionImpl.MAX_SUPPORTED);
       throw new IllegalArgumentException(message);
     }
     javaVersion = new JavaVersionImpl(javaVersionAsInt, enablePreviewFeatures);
@@ -243,8 +242,7 @@ public class InternalCheckVerifier implements CheckVerifier {
     this.cacheContext = new InternalCacheContext(
       true,
       readCache == null ? new DummyCache() : new JavaReadCacheImpl(readCache),
-      writeCache == null ? new DummyCache() : new JavaWriteCacheImpl(writeCache)
-    );
+      writeCache == null ? new DummyCache() : new JavaWriteCacheImpl(writeCache));
     return this;
   }
 
@@ -294,17 +292,18 @@ public class InternalCheckVerifier implements CheckVerifier {
       visitors.add(expectations.parser());
     }
     SonarComponents sonarComponents = CheckVerifierUtils.sonarComponents(isCacheEnabled, readCache, writeCache, null);
-    VisitorsBridgeForTests visitorsBridge;
     JavaVersion actualVersion = javaVersion == null ? DEFAULT_JAVA_VERSION : javaVersion;
-    if (withoutSemantic) {
-      visitorsBridge = new VisitorsBridgeForTests(visitors, sonarComponents, actualVersion);
-    } else {
-      List<File> actualClasspath = classpath == null ? DEFAULT_CLASSPATH : classpath;
-      visitorsBridge = new VisitorsBridgeForTests(visitors, actualClasspath, sonarComponents, actualVersion);
+    VisitorsBridgeForTests.Builder visitorsBridgeBuilder = new VisitorsBridgeForTests.Builder(visitors)
+      .withJavaVersion(actualVersion)
+      .withSonarComponents(sonarComponents)
+      .withAndroidContext(inAndroidContext);
+    if (!withoutSemantic) {
+      List<File> actualClasspath = classpath == null ? TestClasspathUtils.DEFAULT_MODULE.getClassPath() : classpath;
+      visitorsBridgeBuilder.enableSemanticWithProjectClasspath(actualClasspath);
     }
+    VisitorsBridgeForTests visitorsBridge = visitorsBridgeBuilder.build();
 
-    JavaAstScanner astScanner = new JavaAstScanner(sonarComponents);
-    visitorsBridge.setInAndroidContext(inAndroidContext);
+    JavaAstScanner astScanner = new JavaAstScanner(sonarComponents, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     astScanner.setVisitorBridge(visitorsBridge);
 
     List<InputFile> filesToParse = files;
@@ -314,17 +313,21 @@ public class InternalCheckVerifier implements CheckVerifier {
     }
     astScanner.scan(filesToParse);
 
-    JavaFileScannerContextForTests testJavaFileScannerContext = visitorsBridge.lastCreatedTestContext();
-    JavaFileScannerContextForTests testModuleScannerContext = visitorsBridge.lastCreatedModuleContext();
-    if (testJavaFileScannerContext != null) {
-      var issues = new LinkedHashSet<>(testJavaFileScannerContext.getIssues());
-      issues.addAll(testModuleScannerContext.getIssues());
-      var quickFixes = new HashMap<>(testJavaFileScannerContext.getQuickFixes());
-      quickFixes.putAll(testModuleScannerContext.getQuickFixes());
-      checkIssues(issues, quickFixes);
-    } else {
-      checkIssues(Collections.emptySet(), Collections.emptyMap());
+    var issues = new LinkedHashSet<AnalyzerMessage>();
+    var quickFixes = new HashMap<AnalyzerMessage.TextSpan, List<JavaQuickFix>>();
+
+    for (var fileScannerContext : visitorsBridge.testContexts()) {
+      issues.addAll(fileScannerContext.getIssues());
+      quickFixes.putAll(fileScannerContext.getQuickFixes());
     }
+
+    JavaFileScannerContextForTests testModuleScannerContext = visitorsBridge.lastCreatedModuleContext();
+    if (testModuleScannerContext != null) {
+      issues.addAll(testModuleScannerContext.getIssues());
+      quickFixes.putAll(testModuleScannerContext.getQuickFixes());
+    }
+
+    checkIssues(issues, quickFixes);
   }
 
   private void checkIssues(Set<AnalyzerMessage> issues, Map<TextSpan, List<JavaQuickFix>> quickFixes) {

@@ -4,19 +4,18 @@
   <parent>
     <groupId>org.sonarsource.java</groupId>
     <artifactId>it-java-plugin-plugins</artifactId>
-    <version>8.16.0-SNAPSHOT</version>
+    <version>8.24.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>java-extension-plugin</artifactId>
   <packaging>sonar-plugin</packaging>
 
   <name>SonarQube Java :: ITS :: Plugin :: Java Extension Plugin</name>
-  <description>Java Extension</description>
+  <description>Code Analyzer for Java :: Integration Tests :: Plugin :: Java Extension Plugin</description>
 
   <properties>
     <sonar.pluginClass>org.sonar.samples.java.JavaExtensionPlugin</sonar.pluginClass>
     <sonar.skip>true</sonar.skip>
-    <maven.deploy.skip>false</maven.deploy.skip>
   </properties>
 
   <dependencies>

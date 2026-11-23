@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,20 +17,37 @@
 package org.sonar.java.checks.helpers;
 
 import java.util.List;
+import org.sonar.java.model.ExpressionUtils;
 import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.semantic.SymbolMetadata;
+import org.sonar.plugins.java.api.tree.ClassTree;
+import org.sonar.plugins.java.api.tree.MethodTree;
+import org.sonar.plugins.java.api.tree.Tree;
 
 public final class SpringUtils {
 
-  public static final String SPRING_SCOPE_ANNOTATION = "org.springframework.context.annotation.Scope";
+  public static final String SPRING_BOOT_APP_ANNOTATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
+  public static final String CONTROLLER_ANNOTATION = "org.springframework.stereotype.Controller";
+  public static final String COMPONENT_ANNOTATION = "org.springframework.stereotype.Component";
+  public static final String REPOSITORY_ANNOTATION = "org.springframework.stereotype.Repository";
+  public static final String SERVICE_ANNOTATION = "org.springframework.stereotype.Service";
   public static final String AUTOWIRED_ANNOTATION = "org.springframework.beans.factory.annotation.Autowired";
+  public static final String VALUE_ANNOTATION = "org.springframework.beans.factory.annotation.Value";
+  public static final String TRANSACTIONAL_ANNOTATION = "org.springframework.transaction.annotation.Transactional";
+  public static final String BEAN_ANNOTATION = "org.springframework.context.annotation.Bean";
+  public static final String SCOPE_ANNOTATION = "org.springframework.context.annotation.Scope";
+  public static final String CONFIGURATION_ANNOTATION = "org.springframework.context.annotation.Configuration";
+  public static final String ASYNC_ANNOTATION = "org.springframework.scheduling.annotation.Async";
+  public static final String DATA_REPOSITORY_ANNOTATION = "org.springframework.data.repository.Repository";
+  public static final String REST_CONTROLLER_ANNOTATION = "org.springframework.web.bind.annotation.RestController";
+  public static final String SPRING_BOOT_TEST_ANNOTATION = "org.springframework.boot.test.context.SpringBootTest";
 
   private SpringUtils() {
     // Utils class
   }
 
   public static boolean isScopeSingleton(SymbolMetadata clazzMeta) {
-    List<SymbolMetadata.AnnotationValue> values = clazzMeta.valuesForAnnotation(SPRING_SCOPE_ANNOTATION);
+    List<SymbolMetadata.AnnotationValue> values = clazzMeta.valuesForAnnotation(SCOPE_ANNOTATION);
     if (values == null) {
       // Scope is singleton by default
       return true;
@@ -48,6 +65,19 @@ public final class SpringUtils {
 
   public static boolean isAutowired(Symbol symbol) {
     return symbol.metadata().isAnnotatedWith(AUTOWIRED_ANNOTATION);
+  }
+
+  public static boolean isSpringBootTestClass(Symbol symbol) {
+    return symbol.metadata().isAnnotatedWith(SPRING_BOOT_TEST_ANNOTATION);
+  }
+
+  public static boolean isSpringBootUnitTest(MethodTree methodTree) {
+    Tree parentOfType = ExpressionUtils.getParentOfType(methodTree, Tree.Kind.CLASS);
+    if (parentOfType == null) {
+      return false;
+    }
+    ClassTree parentClass = (ClassTree) parentOfType;
+    return UnitTestUtils.isUnitTest(methodTree) && SpringUtils.isSpringBootTestClass(parentClass.symbol());
   }
 
 }

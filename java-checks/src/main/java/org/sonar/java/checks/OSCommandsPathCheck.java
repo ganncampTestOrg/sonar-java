@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -97,7 +97,7 @@ public class OSCommandsPathCheck extends AbstractMethodDetection {
 
   private static final Pattern WINDOWS_DISK_PATTERN = Pattern.compile("^[A-Z]:\\\\.*");
 
-  private static final String MESSAGE = "Make sure the \"PATH\" used to find this command includes only what you intend.";
+  private static final String MESSAGE = "Make sure the \"PATH\" variable only contains fixed, unwriteable directories.";
 
   @Override
   protected MethodMatchers getMethodInvocationMatchers() {

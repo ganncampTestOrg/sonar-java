@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2013-2025 SonarSource SA
+ * Copyright (C) 2013-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,6 +17,9 @@
 package com.sonar.it.java.suite;
 
 import com.google.common.collect.Iterables;
+import com.sonar.orchestrator.build.BuildResult;
+import com.sonar.orchestrator.build.MavenBuild;
+import com.sonar.orchestrator.build.SonarScanner;
 import com.sonar.orchestrator.container.Server;
 import com.sonar.orchestrator.junit4.OrchestratorRule;
 import java.io.File;
@@ -24,6 +27,7 @@ import java.io.FilenameFilter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.apache.commons.io.FileUtils;
 import org.sonarqube.ws.Issues.Issue;
 import org.sonarqube.ws.client.HttpConnector;
@@ -45,6 +49,8 @@ public class TestUtils {
       .getParentFile() // home/tests
       .getParentFile(); // home
   }
+
+  private static final Pattern TELEMETRY_PATTERN = Pattern.compile("Telemetry java\\.[^\r\n]++");
 
   public static File homeDir() {
     return home;
@@ -92,4 +98,29 @@ public class TestUtils {
     server.provisionProject(projectKey, projectName);
     server.associateProjectToQualityProfile(projectKey, languageKey, profileName);
   }
+
+  public static SonarScanner createSonarScanner() {
+    return SonarScanner.create()
+      .setProperty("sonar.scanner.skipJreProvisioning", "true");
+  }
+
+  public static MavenBuild createMavenBuild() {
+    return MavenBuild.create()
+      .setProperty("sonar.scanner.skipJreProvisioning", "true");
+  }
+
+
+  public static String extractTelemetryLogs(BuildResult buildResult) {
+    var telemetryLogs = new StringBuilder();
+    var telemetryMatcher = TELEMETRY_PATTERN.matcher(buildResult.getLogs());
+    while (telemetryMatcher.find()) {
+      telemetryLogs.append(telemetryMatcher.group()).append("\n");
+    }
+    return telemetryLogs.toString();
+  }
+
+  public static Pattern patternWithLiteralDot(String regex) {
+    return Pattern.compile(regex.replace(".", "\\."));
+  }
+
 }

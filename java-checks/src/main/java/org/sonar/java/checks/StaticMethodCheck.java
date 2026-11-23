@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -63,6 +63,14 @@ public class StaticMethodCheck extends BaseTreeVisitor implements JavaFileScanne
       .names("readObjectNoData", "writeReplace", "readResolve")
       .addWithoutParametersMatcher()
       .build());
+
+  private static final MethodMatchers MAIN_METHOD =
+    MethodMatchers.create()
+      .ofAnyType()
+      .names("main")
+      .addParametersMatcher(params ->
+        params.isEmpty() || (params.size() == 1 && params.get(0).isSubtypeOf("java.lang.String[]")))
+      .build();
 
   private JavaFileScannerContext context;
   private Deque<MethodReference> methodReferences = new LinkedList<>();
@@ -160,7 +168,7 @@ public class StaticMethodCheck extends BaseTreeVisitor implements JavaFileScanne
   }
 
   private static boolean isExcluded(MethodTree tree) {
-    return tree.is(Tree.Kind.CONSTRUCTOR) || EXCLUDED_SERIALIZABLE_METHODS.matches(tree) || hasEmptyBody(tree);
+    return tree.is(Tree.Kind.CONSTRUCTOR) || EXCLUDED_SERIALIZABLE_METHODS.matches(tree) || hasEmptyBody(tree) || MAIN_METHOD.matches(tree);
   }
 
   private static boolean hasEmptyBody(MethodTree tree) {

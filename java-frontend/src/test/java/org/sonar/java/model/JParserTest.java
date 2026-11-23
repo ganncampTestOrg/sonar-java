@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -44,7 +44,7 @@ import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.dom.AST;
 import org.eclipse.jdt.core.dom.ASTParser;
 import org.eclipse.jdt.core.dom.CompilationUnit;
-import org.eclipse.jdt.internal.compiler.parser.TerminalTokens;
+import org.eclipse.jdt.internal.compiler.parser.TerminalToken;
 import org.eclipse.jdt.internal.formatter.Token;
 import org.eclipse.jdt.internal.formatter.TokenManager;
 import org.junit.jupiter.api.Test;
@@ -93,6 +93,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
@@ -166,8 +168,8 @@ class JParserTest {
     BiConsumer<InputFile, JParserConfig.Result> consumer = (inputFile, result) -> {
       throw expected;
     };
-    InputFile inputFile = Mockito.mock(InputFile.class);
-    Mockito.doReturn("/tmp/Example.java")
+    InputFile inputFile = mock(InputFile.class);
+    doReturn("/tmp/Example.java")
       .when(inputFile).absolutePath();
 
     Set<InputFile> inputFiles = Collections.singleton(inputFile);
@@ -184,9 +186,8 @@ class JParserTest {
     List<JParserConfig.Result> results = new ArrayList<>();
     BiConsumer<InputFile, JParserConfig.Result> consumer = (inputFile, result) -> results.add(result);
 
-    InputFile inputFile = Mockito.mock(InputFile.class);
-    Mockito
-      .doReturn("/tmp/Example.java")
+    InputFile inputFile = mock(InputFile.class);
+    doReturn("/tmp/Example.java")
       .when(inputFile).absolutePath();
     Mockito
       .doThrow(IOException.class)
@@ -518,12 +519,12 @@ class JParserTest {
     CompilationUnit compilationUnit = (CompilationUnit) astParser.createAST(null);
     TokenManager tokenManager = JParser.createTokenManager(version, unitName, source);
 
-    assertThat(JParser.firstIndexIn(tokenManager, compilationUnit, TerminalTokens.TokenNameIdentifier, TerminalTokens.TokenNameLBRACE)).isEqualTo(1);
-    assertThat(JParser.firstIndexIn(tokenManager, compilationUnit, TerminalTokens.TokenNameLBRACE, TerminalTokens.TokenNameIdentifier)).isEqualTo(1);
-    assertThat(JParser.firstIndexIn(tokenManager, compilationUnit, TerminalTokens.TokenNameRBRACE, TerminalTokens.TokenNameLBRACE)).isEqualTo(2);
-    assertThatThrownBy(() -> JParser.firstIndexIn(tokenManager, compilationUnit, TerminalTokens.TokenNamebreak, TerminalTokens.TokenNameconst))
+    assertThat(JParser.firstIndexIn(tokenManager, compilationUnit, TerminalToken.TokenNameIdentifier, TerminalToken.TokenNameLBRACE)).isEqualTo(1);
+    assertThat(JParser.firstIndexIn(tokenManager, compilationUnit, TerminalToken.TokenNameLBRACE, TerminalToken.TokenNameIdentifier)).isEqualTo(1);
+    assertThat(JParser.firstIndexIn(tokenManager, compilationUnit, TerminalToken.TokenNameRBRACE, TerminalToken.TokenNameLBRACE)).isEqualTo(2);
+    assertThatThrownBy(() -> JParser.firstIndexIn(tokenManager, compilationUnit, TerminalToken.TokenNamebreak, TerminalToken.TokenNameconst))
       .isInstanceOf(IllegalStateException.class)
-      .hasMessage("Failed to find token 82 or 136 in the tokens of a org.eclipse.jdt.core.dom.CompilationUnit");
+      .hasMessage("Failed to find token TokenNamebreak or TokenNameconst in the tokens of a org.eclipse.jdt.core.dom.CompilationUnit");
   }
 
   @Test
@@ -552,7 +553,7 @@ class JParserTest {
     assertThat(isComment(token0)).isFalse();
     assertThatThrownBy(() -> convertTokenTypeToCommentKind(token0))
       .isInstanceOf(IllegalStateException.class)
-      .hasMessage("Unexpected value: 71");
+      .hasMessage("Unexpected value: TokenNameclass");
 
     Token token3 = tokens.get(3);
     assertThat(token3.toString(source)).isEqualTo("// line comment");
@@ -568,7 +569,7 @@ class JParserTest {
 
     Token token5 = tokens.get(5);
     assertThat(token5.toString(source)).isEqualTo("/// markdown comment 1\n  /// markdown comment 2");
-    assertThat(token5.isComment()).isFalse(); // JDT issue https://github.com/eclipse-jdt/eclipse.jdt.core/issues/3914
+    assertThat(token5.isComment()).isTrue();
     assertThat(isComment(token5)).isTrue();
     assertThat(convertTokenTypeToCommentKind(token5)).isEqualTo(CommentKind.MARKDOWN);
 
@@ -872,7 +873,7 @@ class JParserTest {
       .create(MAXIMUM_SUPPORTED_JAVA_VERSION, DEFAULT_CLASSPATH)
       .parse(inputFiles, isCanceled, new AnalysisProgress(inputFiles.size()), action);
 
-    InOrder inOrder = Mockito.inOrder(action, isCanceled);
+    InOrder inOrder = inOrder(action, isCanceled);
     inOrder.verify(isCanceled).getAsBoolean();
     inOrder.verify(action).accept(any(), any());
     inOrder.verify(isCanceled).getAsBoolean();

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2013-2025 SonarSource SA
+ * Copyright (C) 2013-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,8 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import org.apache.commons.lang3.SystemUtils;
+import java.util.Locale;
+
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
@@ -200,7 +201,8 @@ public class JavaClasspathTest {
   private static void testJdk8ProjectWithModularJdk(boolean useJdkHomeProperty) {
     String projectKey = "use-jdk8-only-api-" + (useJdkHomeProperty ? "with" : "without") + "-jdkHome-property";
 
-    SonarScanner scanner = SonarScanner.create(TestUtils.projectDir("use-jdk8-only-api"))
+    SonarScanner scanner = TestUtils.createSonarScanner()
+      .setProjectDir(TestUtils.projectDir("use-jdk8-only-api"))
       .setProperty("sonar.projectKey", projectKey)
       .setProperty("sonar.projectName", projectKey)
       .setProperty("sonar.projectVersion", "1.0-SNAPSHOT")
@@ -258,7 +260,7 @@ public class JavaClasspathTest {
 
   private static Path getJdk8() {
     Path jre8Home = Paths.get("target/jre/jdk8u265-b01-jre");
-    if (SystemUtils.IS_OS_MAC_OSX) {
+    if (System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("mac")) {
       return jre8Home.resolve("Contents/Home");
     }
     return jre8Home;
@@ -269,7 +271,7 @@ public class JavaClasspathTest {
   }
 
   private static void mavenOnDitProject(String goal) {
-    MavenBuild build = MavenBuild.create(TestUtils.projectPom("dit-check"))
+    MavenBuild build = TestUtils.createMavenBuild().setPom(TestUtils.projectPom("dit-check"))
       .setGoals(goal)
       .setProperty("sonar.dynamicAnalysis", "false");
 
@@ -277,7 +279,8 @@ public class JavaClasspathTest {
   }
 
   private static SonarScanner aarProjectSonarScanner() {
-    return SonarScanner.create(TestUtils.projectDir("using-aar-dep"))
+    return TestUtils.createSonarScanner()
+      .setProjectDir(TestUtils.projectDir("using-aar-dep"))
       .setProperty("sonar.projectKey", PROJECT_KEY_AAR)
       .setProperty("sonar.projectName", "using-aar-dep")
       .setProperty("sonar.projectVersion", "1.0-SNAPSHOT")
@@ -285,7 +288,8 @@ public class JavaClasspathTest {
   }
 
   private static SonarScanner ditProjectSonarScanner() {
-    return SonarScanner.create(TestUtils.projectDir("dit-check"))
+    return TestUtils.createSonarScanner()
+      .setProjectDir(TestUtils.projectDir("dit-check"))
       .setProperty("sonar.projectKey", PROJECT_KEY_DIT)
       .setProperty("sonar.projectName", "dit-check")
       .setProperty("sonar.projectVersion", "1.0-SNAPSHOT")

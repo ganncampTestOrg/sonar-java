@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,9 +19,8 @@ package org.sonar.java.checks.aws;
 import org.junit.jupiter.api.Test;
 import org.sonar.java.checks.verifier.CheckVerifier;
 
-import static org.sonar.java.checks.CommonConstants.AWS_CLASSPATH;
-import static org.sonar.java.checks.CommonConstants.AWS_MODULE;
 import static org.sonar.java.checks.verifier.TestUtils.mainCodeSourcesPathInModule;
+import static org.sonar.java.test.classpath.TestClasspathUtils.AWS_MODULE;
 
 
 class AwsCredentialsShouldBeSetExplicitlyCheckTest {
@@ -30,7 +29,7 @@ class AwsCredentialsShouldBeSetExplicitlyCheckTest {
     CheckVerifier.newVerifier()
       .onFile(mainCodeSourcesPathInModule(AWS_MODULE, "checks/aws/AwsCredentialsShouldBeSetExplicitlyCheckSample.java"))
       .withCheck(new AwsCredentialsShouldBeSetExplicitlyCheck())
-      .withClassPath(AWS_CLASSPATH)
+      .withClassPath(AWS_MODULE.getClassPath())
       .verifyIssues();
   }
 

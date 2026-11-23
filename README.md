@@ -1,7 +1,7 @@
-Code Quality and Security for Java [![Build Status](https://api.cirrus-ci.com/github/SonarSource/sonar-java.svg?branch=master)](https://cirrus-ci.com/github/SonarSource/sonar-java) [![Quality Gate](https://next.sonarqube.com/sonarqube/api/project_badges/measure?project=org.sonarsource.java%3Ajava&metric=alert_status)](https://next.sonarqube.com/sonarqube/dashboard?id=org.sonarsource.java%3Ajava) [![Coverage](https://next.sonarqube.com/sonarqube/api/project_badges/measure?project=org.sonarsource.java%3Ajava&metric=coverage)](https://next.sonarqube.com/sonarqube/component_measures/domain/Coverage?id=org.sonarsource.java%3Ajava)
+Code Quality and Security for Java [![Build Status](https://github.com/SonarSource/sonar-java/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/SonarSource/sonar-java/actions/workflows/build.yml) [![Quality Gate](https://next.sonarqube.com/sonarqube/api/project_badges/measure?project=org.sonarsource.java%3Ajava&metric=alert_status)](https://next.sonarqube.com/sonarqube/dashboard?id=org.sonarsource.java%3Ajava) [![Coverage](https://next.sonarqube.com/sonarqube/api/project_badges/measure?project=org.sonarsource.java%3Ajava&metric=coverage)](https://next.sonarqube.com/sonarqube/component_measures/domain/Coverage?id=org.sonarsource.java%3Ajava)
 ==========
 
-This SonarSource project is a code analyzer for Java projects to help developers produce [Clean Code](https://www.sonarsource.com/solutions/clean-code/). Information about the analysis of Java features is available [here](https://redirect.sonarsource.com/plugins/java.html).
+This Sonar project is a code analyzer for Java projects to help developers deliver integrated code quality and security. Information about the analysis of Java features is available [here](https://redirect.sonarsource.com/plugins/java.html).
 
 Features
 --------
@@ -55,9 +55,9 @@ To run tests locally follow these instructions.
 
 ### Java versions
 
-You need `Java 23` to build the project and `Java 17` run the Integration Tests (ITs).
-* `Java 17` can be used to build and test all modules except under `java-checks-test-sources` that requires `Java 23`.
-* `Java 23` can be used to build and test all modules except under `its` that requires `Java 17` because of SQ incompatibility.
+You need `Java 25` to compile and run the Unit Tests of the project and `Java 21` run most Integration Tests (ITs).
+Ruling test on Guava project require `Java 17`.
+Note that `Java 21` can be used to build and test all modules except under `java-checks-test-sources` (as they require `Java 25`).
 
 ### Build the Project and Run Unit Tests
 
@@ -115,14 +115,14 @@ To run the test, first make sure the submodules are checked out:
 
     git submodule update --init --recursive
 
-Then, ensure that the `JAVA_HOME` environment variable is set for the ruling tests execution and that it points to your local JDK 17 installation.
+Then, ensure that the `JAVA_HOME` environment variable is set for the ruling tests execution and that it points to your local JDK 21 installation.
 Failing to do so will produce inconsistencies with the expected results.
 
 From the `its/ruling` folder, launch the ruling tests:
 
     mvn clean install -Pit-ruling -DcommunityEditionTestsOnly=true 
     # Alternatively
-    JAVA_HOME=/my/local/java17/jdk/ mvn clean install -Pit-ruling -DcommunityEditionTestsOnly=true
+    JAVA_HOME=/my/local/java21/jdk/ mvn clean install -Pit-ruling -DcommunityEditionTestsOnly=true
 
 Note for internal contributors: in order to also execute the tests that depend on the SonarQube Server Enterprise Edition, use: 
 
@@ -164,7 +164,7 @@ Make sure that the `java-checks-test-sources` module has been compiled (ie: the 
 
 In doubt, go the [`java-checks-test-sources`](java-checks-tests-sources) module and run:
 ```shell
-# Use java 23!
+# Use java 25!
 mvn clean compile
 ```
 
@@ -173,7 +173,7 @@ mvn clean compile
 To run the tests, move to the [`its/autoscan`](its/autoscan) folder and run:
 ```shell
 # cd its/autoscan
-# use Java 17!
+# use Java 21!
 mvn clean package --batch-mode --errors --show-version \
    --activate-profiles it-autoscan \
   -Dsonar.runtimeVersion=LATEST_RELEASE
@@ -187,14 +187,14 @@ For more detailed information, you can compare the differences between the resul
 * [java-checks-test-sources-no-binaries](its/autoscan/target/actual/java-checks-test-sources-no-binaries)
 
 Depending on the results found, you might need to update the ground truth.
-The expected results are listed in [src/test/resources](its/autoscan/src/test/resources/autoscan/).
+The expected results are listed in [src/test/resources](its/autoscan/src/test/resources/autoscan/diffs).
 
 #### Debugging Integration Tests
 You can debug ITs by adding `-Dmaven.binary=mvnDebug` as an option when running the tests. This will cause the analyzer JVM to wait for a debugger to be attached before continuing.
 
 ### License
 
-Copyright 2012-2025 SonarSource.
+Copyright 2012-2026 SonarSource.
 
 SonarQube analyzers released after November 29, 2024, including patch fixes for prior versions, are published under the [Sonar Source-Available License Version 1 (SSALv1)](LICENSE.txt).
 

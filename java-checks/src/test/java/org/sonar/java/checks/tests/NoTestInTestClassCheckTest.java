@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,6 +29,14 @@ class NoTestInTestClassCheckTest {
   void test() {
     CheckVerifier.newVerifier()
       .onFile(nonCompilingTestSourcesPath("checks/NoTestInTestClassCheckSample.java"))
+      .withCheck(new NoTestInTestClassCheck())
+      .verifyIssues();
+  }
+
+  @Test
+  void testUnknownParent() {
+    CheckVerifier.newVerifier()
+      .onFile(nonCompilingTestSourcesPath("checks/NoTestInTestClassCheckUnknownParent.java"))
       .withCheck(new NoTestInTestClassCheck())
       .verifyIssues();
   }

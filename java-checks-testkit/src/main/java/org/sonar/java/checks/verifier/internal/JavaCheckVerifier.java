@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,6 @@
 package org.sonar.java.checks.verifier.internal;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -27,7 +26,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 import org.sonar.api.batch.fs.InputFile;
@@ -43,10 +41,11 @@ import org.sonar.java.caching.DummyCache;
 import org.sonar.java.caching.JavaReadCacheImpl;
 import org.sonar.java.caching.JavaWriteCacheImpl;
 import org.sonar.java.checks.verifier.CheckVerifier;
-import org.sonar.java.checks.verifier.FilesUtils;
 import org.sonar.java.model.JavaVersionImpl;
 import org.sonar.java.reporting.AnalyzerMessage;
 import org.sonar.java.reporting.JavaQuickFix;
+import org.sonar.java.telemetry.NoOpTelemetry;
+import org.sonar.java.telemetry.TelemetryKey;
 import org.sonar.java.test.classpath.TestClasspathUtils;
 import org.sonar.java.testing.JavaFileScannerContextForTests;
 import org.sonar.java.testing.VisitorsBridgeForTests;
@@ -69,7 +68,6 @@ import static org.sonar.java.checks.verifier.internal.CheckVerifierUtils.require
 public class JavaCheckVerifier implements CheckVerifier {
 
   private static final JavaVersion DEFAULT_JAVA_VERSION = new JavaVersionImpl();
-  private static final List<File> DEFAULT_CLASSPATH;
   private static final int COMMENT_PREFIX_LENGTH = 2;
   private static final int COMMENT_SUFFIX_LENGTH = 0;
 
@@ -80,21 +78,19 @@ public class JavaCheckVerifier implements CheckVerifier {
     return new JavaCheckVerifier();
   }
 
-  static {
-    Path path = Paths.get(FilesUtils.DEFAULT_TEST_CLASSPATH_FILE.replace('/', File.separatorChar));
-    // Because of 'java-custom-rules-example' module, we silently use an empty classpath if the file does not exist
-    DEFAULT_CLASSPATH = Files.exists(path) ? TestClasspathUtils.loadFromFile(path.toString()) : new ArrayList<>();
-    Optional.of(new File(FilesUtils.DEFAULT_TEST_CLASSES_DIRECTORY)).filter(File::exists).ifPresent(DEFAULT_CLASSPATH::add);
-  }
-
   private List<JavaFileScanner> checks = null;
   private List<File> classpath = null;
+  private List<String> jarsToAdd = new ArrayList<>();
+  private List<String> jarsToRemove = new ArrayList<>();
+  @VisibleForTesting
+  List<File> actualClasspath = null;
   private JavaVersion javaVersion = null;
   private boolean inAndroidContext = false;
   private List<InputFile> files = null;
   private boolean withoutSemantic = false;
   private boolean isCacheEnabled = false;
-  private Consumer<CompilationUnitTree> compilationUnitModifier = unused -> {};
+  private Consumer<CompilationUnitTree> compilationUnitModifier = unused -> {
+  };
 
   @VisibleForTesting
   CacheContext cacheContext = null;
@@ -108,23 +104,23 @@ public class JavaCheckVerifier implements CheckVerifier {
     MultiFileVerifier verifier = MultiFileVerifier.create(Paths.get(files.get(0).uri()), UTF_8);
 
     JavaVersion actualVersion = javaVersion == null ? DEFAULT_JAVA_VERSION : javaVersion;
-    List<File> actualClasspath = classpath == null ? DEFAULT_CLASSPATH : classpath;
 
     List<JavaFileScanner> visitors = new ArrayList<>(checks);
     visitors.add(new JavaProjectContextModelVisitor(projectContextModel));
     CommentLinesVisitor commentLinesVisitor = new CommentLinesVisitor();
     visitors.add(commentLinesVisitor);
     SonarComponents sonarComponents = CheckVerifierUtils.sonarComponents(isCacheEnabled, readCache, writeCache, rootDirectory);
-    VisitorsBridgeForTests visitorsBridge;
-    if (withoutSemantic) {
-      visitorsBridge = new VisitorsBridgeForTests(visitors, sonarComponents, actualVersion);
-    } else {
-      visitorsBridge = new VisitorsBridgeForTests(visitors, actualClasspath, sonarComponents, actualVersion);
+    VisitorsBridgeForTests.Builder visitorsBridgeBuilder = new VisitorsBridgeForTests.Builder(visitors)
+      .withJavaVersion(actualVersion)
+      .withSonarComponents(sonarComponents)
+      .withAndroidContext(inAndroidContext);
+    if (!withoutSemantic) {
+      setActualClasspath();
+      visitorsBridgeBuilder.enableSemanticWithProjectClasspath(actualClasspath);
     }
 
-    JavaAstScanner astScanner = new JavaAstScanner(sonarComponents);
-    visitorsBridge.setInAndroidContext(inAndroidContext);
-
+    JavaAstScanner astScanner = new JavaAstScanner(sonarComponents, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
+    VisitorsBridgeForTests visitorsBridge = visitorsBridgeBuilder.build();
     astScanner.setVisitorBridge(visitorsBridge);
 
     List<InputFile> filesToParse = files;
@@ -136,14 +132,23 @@ public class JavaCheckVerifier implements CheckVerifier {
 
     addComments(verifier, commentLinesVisitor);
 
-    JavaFileScannerContextForTests testJavaFileScannerContext = visitorsBridge.lastCreatedTestContext();
+    for (var fileScannerContext : visitorsBridge.testContexts()) {
+      addIssues(fileScannerContext, verifier);
+    }
+
     JavaFileScannerContextForTests testModuleScannerContext = visitorsBridge.lastCreatedModuleContext();
-    if (testJavaFileScannerContext != null) {
-      addIssues(testJavaFileScannerContext, verifier);
+    if (testModuleScannerContext != null) {
       addIssues(testModuleScannerContext, verifier);
     }
 
     return verifier;
+  }
+
+  private void setActualClasspath() {
+    List<File> newClasspath = classpath == null ? new ArrayList<>(TestClasspathUtils.DEFAULT_MODULE.getClassPath()) : classpath;
+    jarsToRemove.forEach(f -> newClasspath.removeIf(file -> file.getName().contains(f)));
+    newClasspath.addAll(TestClasspathUtils.getTestJars(jarsToAdd));
+    actualClasspath = Collections.unmodifiableList(newClasspath);
   }
 
   private static void addIssues(JavaFileScannerContextForTests scannerContext, MultiFileVerifier verifier) {
@@ -240,6 +245,18 @@ public class JavaCheckVerifier implements CheckVerifier {
   public CheckVerifier withClassPath(Collection<File> classpath) {
     requiresNull(this.classpath, "classpath");
     this.classpath = new ArrayList<>(classpath);
+    return this;
+  }
+
+  @Override
+  public CheckVerifier addJarsToClasspath(String... jarsToAdd) {
+    this.jarsToAdd.addAll(Arrays.asList(jarsToAdd));
+    return this;
+  }
+
+  @Override
+  public CheckVerifier removeJarsFromClasspath(String... jarsToRemove) {
+    this.jarsToRemove.addAll(Arrays.asList(jarsToRemove));
     return this;
   }
 

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -16,12 +16,16 @@
  */
 package org.sonar.java.model;
 
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.sonar.api.config.Configuration;
 import org.sonar.plugins.java.api.JavaVersion;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
 class JavaVersionImplTest {
 
@@ -48,11 +52,12 @@ class JavaVersionImplTest {
     assertThat(version.isJava21Compatible()).isFalse();
     assertThat(version.isJava22Compatible()).isFalse();
     assertThat(version.isJava23Compatible()).isFalse();
+    assertThat(version.isJava24Compatible()).isFalse();
     assertThat(version.asInt()).isEqualTo(-1);
   }
 
   @ParameterizedTest(name = "JavaVersion: \"{0}\"")
-  @ValueSource(ints = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 42})
+  @ValueSource(ints = {5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 42})
   void java_versions(int javaVersionAsInt) {
     JavaVersion version = new JavaVersionImpl(javaVersionAsInt);
     assertThat(version.isSet()).isTrue();
@@ -73,6 +78,7 @@ class JavaVersionImplTest {
     assertThat(version.isJava21Compatible()).isEqualTo(javaVersionAsInt >= 21);
     assertThat(version.isJava22Compatible()).isEqualTo(javaVersionAsInt >= 22);
     assertThat(version.isJava23Compatible()).isEqualTo(javaVersionAsInt >= 23);
+    assertThat(version.isJava24Compatible()).isEqualTo(javaVersionAsInt >= 24);
 
     assertThat(version.asInt()).isEqualTo(javaVersionAsInt);
   }
@@ -93,9 +99,9 @@ class JavaVersionImplTest {
 
   @Test
   void test_effective_java_version() {
-    assertThat(new JavaVersionImpl().effectiveJavaVersionAsString()).isEqualTo("23");
+    assertThat(new JavaVersionImpl().effectiveJavaVersionAsString()).isEqualTo("24");
     assertThat(new JavaVersionImpl(10).effectiveJavaVersionAsString()).isEqualTo("10");
-    assertThat(new JavaVersionImpl(-1).effectiveJavaVersionAsString()).isEqualTo("23");
+    assertThat(new JavaVersionImpl(-1).effectiveJavaVersionAsString()).isEqualTo("24");
   }
 
   @Test
@@ -179,6 +185,17 @@ class JavaVersionImplTest {
     assertThat(version.isNotSet()).isTrue();
     assertThat(version.asInt()).isEqualTo(-1);
     assertThat(version.arePreviewFeaturesEnabled()).isFalse();
+  }
+
+  @Test
+  void test_preview_features_without_max_version_from_config(){
+    var config = mock(Configuration.class);
+    doReturn(Optional.of("17")).when(config).get(JavaVersion.SOURCE_VERSION);
+    doReturn(Optional.of("true")).when(config).get(JavaVersion.ENABLE_PREVIEW);
+    var javaVersion = JavaVersionImpl.readFromConfiguration(config);
+    assertThat(javaVersion.asInt()).isEqualTo(17);
+    // Preview features should be disabled because 17 is not the max supported version
+    assertThat(javaVersion.arePreviewFeaturesEnabled()).isFalse();
   }
   
 }

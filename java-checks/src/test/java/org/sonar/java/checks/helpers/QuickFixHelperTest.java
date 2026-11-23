@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,7 +25,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.provider.ArgumentsSource;
-import org.mockito.Mockito;
 import org.sonar.java.Preconditions;
 import org.sonar.java.checks.helpers.QuickFixHelper.ImportSupplier;
 import org.sonar.java.model.InternalSyntaxToken;
@@ -527,8 +526,8 @@ class QuickFixHelperTest {
     }
 
     private JavaFileScannerContext mockContext(String source) {
-      JavaFileScannerContext context = Mockito.mock(JavaFileScannerContext.class);
-      Mockito.when(context.getTree())
+      JavaFileScannerContext context = mock(JavaFileScannerContext.class);
+      when(context.getTree())
         .thenReturn(JParserTestUtils.parse(source));
       return context;
     }

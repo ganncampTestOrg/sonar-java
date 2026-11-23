@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,16 +28,19 @@ import org.sonar.api.SonarProduct;
 import org.sonar.api.config.PropertyDefinition;
 import org.sonar.java.AnalysisWarningsWrapper;
 import org.sonar.java.DefaultJavaResourceLocator;
+import org.sonar.java.DefaultModuleMetadata;
 import org.sonar.java.JavaConstants;
 import org.sonar.java.SonarComponents;
-import org.sonar.plugins.java.api.caching.SonarLintCache;
 import org.sonar.java.classpath.ClasspathForMain;
 import org.sonar.java.classpath.ClasspathForMainForSonarLint;
 import org.sonar.java.classpath.ClasspathForTest;
 import org.sonar.java.classpath.ClasspathProperties;
 import org.sonar.java.filters.PostAnalysisIssueFilter;
 import org.sonar.java.jsp.Jasper;
+import org.sonar.java.telemetry.NoOpTelemetry;
+import org.sonar.java.telemetry.DefaultTelemetry;
 import org.sonar.plugins.java.api.JavaVersion;
+import org.sonar.plugins.java.api.caching.SonarLintCache;
 import org.sonar.plugins.surefire.SurefireExtensions;
 
 public class JavaPlugin implements Plugin {
@@ -48,11 +51,14 @@ public class JavaPlugin implements Plugin {
     List<Object> list = new ArrayList<>();
 
     if (context.getRuntime().getProduct() == SonarProduct.SONARLINT) {
+      list.add(NoOpTelemetry.class);
       list.add(ClasspathForMainForSonarLint.class);
       // Some custom rules (i.e. DBD) depend on the presence of SonarLintCache when executing in a SonarLint context.
       // Hence, we must provide it here.
       list.add(SonarLintCache.class);
     } else {
+      list.add(DefaultTelemetry.class);
+      list.add(ProjectEndOfAnalysisSensor.class);
       list.addAll(SurefireExtensions.getExtensions());
       list.add(DroppedPropertiesSensor.class);
       list.add(JavaSonarWayProfile.class);
@@ -112,6 +118,7 @@ public class JavaPlugin implements Plugin {
       PostAnalysisIssueFilter.class));
 
     list.add(AnalysisWarningsWrapper.class);
+    list.add(DefaultModuleMetadata.class);
     context.addExtensions(Collections.unmodifiableList(list));
   }
 

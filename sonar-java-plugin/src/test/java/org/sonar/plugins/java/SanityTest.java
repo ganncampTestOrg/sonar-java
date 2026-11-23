@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,7 +52,8 @@ import org.sonar.java.SonarComponents;
 import org.sonar.java.ast.JavaAstScanner;
 import org.sonar.java.checks.verifier.FilesUtils;
 import org.sonar.java.model.JParserConfig;
-import org.sonar.java.test.classpath.TestClasspathUtils;
+import org.sonar.java.telemetry.NoOpTelemetry;
+import org.sonar.java.telemetry.TelemetryKey;
 import org.sonar.java.testing.VisitorsBridgeForTests;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.JavaVersion;
@@ -65,16 +66,15 @@ import static org.sonar.java.checks.verifier.TestUtils.mainCodeSourcesPathInModu
 import static org.sonar.java.checks.verifier.TestUtils.nonCompilingTestSourcesPath;
 import static org.sonar.java.checks.verifier.TestUtils.nonCompilingTestSourcesPathInModule;
 import static org.sonar.java.checks.verifier.TestUtils.testCodeSourcesPath;
+import static org.sonar.java.test.classpath.TestClasspathUtils.AWS_MODULE;
+import static org.sonar.java.test.classpath.TestClasspathUtils.DEFAULT_MODULE;
 
 class SanityTest {
 
   private static final Logger LOG = LoggerFactory.getLogger(SanityTest.class);
-  public static final String DEFAULT_MODULE = "default";
 
   @RegisterExtension
   public final LogTesterJUnit5 logTester = new LogTesterJUnit5().setLevel(Level.DEBUG);
-
-  private static final String AWS_MODULE = "aws";
 
   private static final String[] COMPILING_FILE_DIRECTORIES = {
     mainCodeSourcesPath(""),
@@ -164,8 +164,8 @@ class SanityTest {
 
   private static List<File> getClasspath() {
     Set<File> classpathSet = new LinkedHashSet<>();
-    appendModuleClassPath(classpathSet, DEFAULT_MODULE);
-    appendModuleClassPath(classpathSet, AWS_MODULE);
+    classpathSet.addAll(DEFAULT_MODULE.getClassPath());
+    classpathSet.addAll(AWS_MODULE.getClassPath());
     assertThat(classpathSet).isNotEmpty();
     return classpathSet.stream().toList();
   }
@@ -230,16 +230,15 @@ class SanityTest {
     return !(filename.contains("ParsingError") || filename.contains("ParseError"));
   }
 
-  private static void appendModuleClassPath(Set<File> classpath, String module) {
-    classpath.addAll(TestClasspathUtils.loadFromFile(FilesUtils.TEST_SOURCES_ROOT + module + FilesUtils.TARGET_TEST_CLASSPATH_FILE));
-    classpath.add(new File(FilesUtils.TEST_SOURCES_ROOT + module + FilesUtils.TARGET_CLASSES).getAbsoluteFile());
-  }
-
   private static List<SanityCheckException> scanFiles(File moduleBaseDir, List<InputFile> inputFiles, List<JavaCheck> checks, List<File> classpath) {
     SonarComponents sonarComponents = sonarComponents(moduleBaseDir, inputFiles);
-    JavaAstScanner scanner = new JavaAstScanner(sonarComponents);
+    JavaAstScanner scanner = new JavaAstScanner(sonarComponents, new NoOpTelemetry(), TelemetryKey.JAVA_ANALYSIS_MAIN);
     JavaVersion javaVersion = JParserConfig.MAXIMUM_SUPPORTED_JAVA_VERSION;
-    scanner.setVisitorBridge(new VisitorsBridgeForTests(checks, classpath, sonarComponents, javaVersion));
+    scanner.setVisitorBridge(new VisitorsBridgeForTests.Builder(checks)
+      .enableSemanticWithProjectClasspath(classpath)
+      .withSonarComponents(sonarComponents)
+      .withJavaVersion(javaVersion)
+      .build());
     List<SanityCheckException> exceptions = new ArrayList<>();
     AnalysisProgress analysisProgress = new AnalysisProgress(inputFiles.size());
     JParserConfig.Mode.BATCH

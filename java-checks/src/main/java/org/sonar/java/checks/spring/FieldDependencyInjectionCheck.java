@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -18,6 +18,8 @@ package org.sonar.java.checks.spring;
 
 import java.util.List;
 import org.sonar.check.Rule;
+import org.sonar.java.checks.helpers.InjectionHelper;
+import org.sonar.java.checks.helpers.SpringUtils;
 import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
 import org.sonar.plugins.java.api.tree.ClassTree;
 import org.sonar.plugins.java.api.tree.Tree;
@@ -26,7 +28,7 @@ import org.sonar.plugins.java.api.tree.VariableTree;
 @Rule(key = "S6813")
 public class FieldDependencyInjectionCheck extends IssuableSubscriptionVisitor {
   private static final List<String> INJECTION_ANNOTATIONS = List.of(
-    "org.springframework.beans.factory.annotation.Autowired",
+    SpringUtils.AUTOWIRED_ANNOTATION,
     "javax.inject.Inject",
     "jakarta.inject.Inject");
 
@@ -38,6 +40,8 @@ public class FieldDependencyInjectionCheck extends IssuableSubscriptionVisitor {
   @Override
   public void visitNode(Tree tree) {
     var ct = (ClassTree) tree;
+    if (InjectionHelper.classCannotUseConstructorInjection(ct)) return;
+
     ct.members().forEach(member -> {
       if (member.is(Tree.Kind.VARIABLE)) {
         var vt = (VariableTree) member;

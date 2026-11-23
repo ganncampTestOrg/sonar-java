@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@ import java.text.ParseException;
 import java.util.Locale;
 import javax.xml.stream.XMLStreamException;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.codehaus.staxmate.in.ElementFilter;
 import org.codehaus.staxmate.in.SMEvent;
 import org.codehaus.staxmate.in.SMHierarchicCursor;
@@ -127,7 +128,7 @@ public class SurefireStaxHandler {
   private static String getTestCaseName(SMInputCursor testCaseCursor) throws XMLStreamException {
     String classname = testCaseCursor.getAttrValue("classname");
     String name = testCaseCursor.getAttrValue("name");
-    if (StringUtils.contains(classname, "$")) {
+    if (Strings.CS.contains(classname, "$")) {
       return StringUtils.substringAfter(classname, "$") + "/" + name;
     }
     return name;

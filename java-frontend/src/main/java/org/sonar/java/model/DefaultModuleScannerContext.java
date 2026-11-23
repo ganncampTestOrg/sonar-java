@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,10 +17,12 @@
 package org.sonar.java.model;
 
 import java.io.File;
+import java.util.Optional;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.SonarProduct;
 import org.sonar.api.batch.fs.InputComponent;
+import org.sonar.api.config.Configuration;
 import org.sonar.java.SonarComponents;
 import org.sonar.java.caching.CacheContextImpl;
 import org.sonar.java.reporting.AnalyzerMessage;
@@ -94,6 +96,11 @@ public class DefaultModuleScannerContext implements ModuleScannerContext {
     return sonarComponents.getModuleKey();
   }
 
+  @Override
+  public Optional<String> getFullyQualifiedModuleKey() {
+    return sonarComponents.getFullyQualifiedModuleKey();
+  }
+  
   @CheckForNull
   @Override
   public SonarProduct sonarProduct() {
@@ -109,6 +116,11 @@ public class DefaultModuleScannerContext implements ModuleScannerContext {
     }
 
     return context.runtime().getProduct();
+  }
+
+  @Override
+  public Configuration getConfiguration() {
+    return sonarComponents.getConfiguration();
   }
 
   @Nullable

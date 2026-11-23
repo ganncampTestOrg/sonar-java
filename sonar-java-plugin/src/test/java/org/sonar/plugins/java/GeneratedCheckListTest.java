@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -126,7 +126,6 @@ class GeneratedCheckListTest {
     }
 
     Set<String> keys = new HashSet<>();
-    Set<String> names = new HashSet<>();
     CustomRulesDefinition definition = new CustomRulesDefinition();
     RulesDefinition.Context context = new RulesDefinition.Context();
     definition.define(context);
@@ -135,7 +134,6 @@ class GeneratedCheckListTest {
     for (RulesDefinition.Rule rule : rules) {
       assertThat(keys).as("Duplicate key " + rule.key()).doesNotContain(rule.key());
       keys.add(rule.key());
-      names.add(rule.name());
       assertThat(getClass().getResource("/org/sonar/l10n/java/rules/" + GeneratedCheckList.REPOSITORY_KEY + "/" + keyMap.get(rule.key()) + ".html"))
         .overridingErrorMessage("No description for " + rule.key() + " " + keyMap.get(rule.key()))
         .isNotNull();

@@ -5,15 +5,15 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>83.0.0.2369</version>
+    <version>86.0.0.3040</version>
   </parent>
 
   <groupId>org.sonarsource.java</groupId>
   <artifactId>java</artifactId>
-  <version>8.16.0-SNAPSHOT</version>
+  <version>8.24.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarJava</name>
-  <description>Code Analyzer for Java</description>
+  <description>Code Analyzer for Java :: Parent POM</description>
   <url>http://redirect.sonarsource.com/plugins/java.html</url>
   <inceptionYear>2012</inceptionYear>
   <organization>
@@ -75,8 +75,8 @@
     <url>https://jira.sonarsource.com/browse/SONARJAVA</url>
   </issueManagement>
   <ciManagement>
-    <system>Cirrus CI</system>
-    <url>https://cirrus-ci.com/github/SonarSource/sonar-java</url>
+    <system>GitHub Actions</system>
+    <url>https://github.com/SonarSource/sonar-java/actions/workflows/build.yml</url>
   </ciManagement>
 
   <properties>
@@ -87,14 +87,17 @@
     <maven.test.redirectTestOutputToFile>true</maven.test.redirectTestOutputToFile>
 
     <sonar.version>25.1.0.102122</sonar.version>
+    <!-- Required by shadow scans -->
+    <sonar.organization>sonarsource</sonar.organization>
     <!--
       sonar-plugin-api should be compatible with SQ peach. You can see which version SQ is using
       at SonarSource/sonarqube/gradle.properties
      -->
-    <sonar.plugin.api.version>11.0.0.2664</sonar.plugin.api.version>
+    <sonar.plugin.api.version>13.0.0.3026</sonar.plugin.api.version>
     <sonarlint.plugin.api.version>10.13.0.79996</sonarlint.plugin.api.version>
-    <analyzer.commons.version>2.17.0.3322</analyzer.commons.version>
-    <orchestrator.version>5.5.0.2535</orchestrator.version>
+    <sonar.sca.exclusions>its/**,java-checks-test-sources/**</sonar.sca.exclusions>
+    <analyzer.commons.version>2.18.0.3393</analyzer.commons.version>
+    <orchestrator.version>5.6.2.2625</orchestrator.version>
     <sslr.version>1.24.0.633</sslr.version>
     <argLine>-Xmx512m</argLine>
     <gitRepositoryName>sonar-java</gitRepositoryName>
@@ -105,6 +108,11 @@
 
     <!-- Overrides parent pom to use a more recent version of jacoco -->
     <version.jacoco.plugin>0.8.13</version.jacoco.plugin>
+
+    <mockito-core.version>5.18.0</mockito-core.version>
+    <test-java-agent-directory>${project.build.directory}/test-java-agent-libs</test-java-agent-directory>
+    <jacoco-agent-jar>org.jacoco.agent-${version.jacoco.plugin}-runtime.jar</jacoco-agent-jar>
+    <mockito-agent-jar>mockito-core-${mockito-core.version}.jar</mockito-agent-jar>
   </properties>
 
   <distributionManagement>
@@ -198,7 +206,7 @@
       <dependency>
         <groupId>com.google.guava</groupId>
         <artifactId>guava</artifactId>
-        <version>33.3.1-jre</version>
+        <version>33.4.8-jre</version>
       </dependency>
       <dependency>
         <groupId>com.google.code.findbugs</groupId>
@@ -239,13 +247,13 @@
       <dependency>
         <groupId>org.mockito</groupId>
         <artifactId>mockito-core</artifactId>
-        <version>5.14.2</version>
+        <version>${mockito-core.version}</version>
         <scope>test</scope>
       </dependency>
       <dependency>
         <groupId>org.mockito</groupId>
         <artifactId>mockito-junit-jupiter</artifactId>
-        <version>5.14.2</version>
+        <version>${mockito-core.version}</version>
         <scope>test</scope>
       </dependency>
       <dependency>
@@ -270,22 +278,22 @@
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-lang3</artifactId>
-        <version>3.17.0</version>
+        <version>3.20.0</version>
       </dependency>
       <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-expression</artifactId>
-        <version>6.1.13</version>
+        <version>6.2.11</version>
       </dependency>
       <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
-        <version>2.17.0</version>
+        <version>2.19.0</version>
       </dependency>
       <dependency>
         <groupId>com.google.code.gson</groupId>
         <artifactId>gson</artifactId>
-        <version>2.11.0</version>
+        <version>2.13.1</version>
         <scope>compile</scope>
       </dependency>
       <!-- staxmate is used by java-surefire -->
@@ -363,12 +371,45 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>download-jacoco-agent</id>
+            <phase>process-test-resources</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>org.jacoco</groupId>
+                  <artifactId>org.jacoco.agent</artifactId>
+                  <version>${version.jacoco.plugin}</version>
+                  <classifier>runtime</classifier>
+                  <outputDirectory>${test-java-agent-directory}</outputDirectory>
+                  <destFileName>${jacoco-agent-jar}</destFileName>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>org.mockito</groupId>
+                  <artifactId>mockito-core</artifactId>
+                  <version>${mockito-core.version}</version>
+                  <outputDirectory>${test-java-agent-directory}</outputDirectory>
+                  <destFileName>${mockito-agent-jar}</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
           <runOrder>alphabetical</runOrder>
           <environmentVariables>
             <M2_REPO>${settings.localRepository}</M2_REPO>
           </environmentVariables>
+          <argLine> -Dnet.bytebuddy.experimental=true -javaagent:"${test-java-agent-directory}/${jacoco-agent-jar}=destfile=${project.build.directory}/jacoco.exec" -javaagent:"${test-java-agent-directory}/${mockito-agent-jar}" </argLine>
         </configuration>
       </plugin>
     </plugins>

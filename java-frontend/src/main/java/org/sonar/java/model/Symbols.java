@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -60,6 +60,11 @@ public class Symbols {
     }
 
     @Override
+    public List<AnnotationInstance> symbolAnnotations() {
+      return Collections.emptyList();
+    }
+
+    @Override
     public NullabilityData nullabilityData() {
       return JSymbolMetadata.unknownNullabilityAt(NullabilityLevel.UNKNOWN);
     }
@@ -73,6 +78,11 @@ public class Symbols {
     @Override
     public AnnotationTree findAnnotationTree(AnnotationInstance annotationInstance) {
       return null;
+    }
+
+    @Override
+    public SymbolMetadata[] parametersMetadata() {
+      return new SymbolMetadata[0];
     }
   };
 
@@ -448,6 +458,16 @@ public class Symbols {
     @Override
     public List<Type> typeArguments() {
       return Collections.emptyList();
+    }
+
+    @Override
+    public boolean isIntersectionType() {
+      return false;
+    }
+
+    @Override
+    public Type[] getIntersectionTypes() {
+      return new Type[] { this };
     }
   }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,15 +17,16 @@
 package org.sonar.java.testing;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.java.SonarComponents;
 import org.sonar.java.annotations.VisibleForTesting;
 import org.sonar.java.model.JavaVersionImpl;
 import org.sonar.plugins.java.api.ProjectContextModelReader;
-import org.sonar.plugins.java.api.semantic.Sema;
 import org.sonar.java.model.VisitorsBridge;
 import org.sonar.plugins.java.api.InputFileScannerContext;
 import org.sonar.plugins.java.api.JavaCheck;
@@ -34,41 +35,85 @@ import org.sonar.plugins.java.api.JavaFileScannerContext;
 import org.sonar.plugins.java.api.JavaVersion;
 import org.sonar.plugins.java.api.ModuleScannerContext;
 import org.sonar.plugins.java.api.caching.CacheContext;
+import org.sonar.plugins.java.api.semantic.Sema;
 import org.sonar.plugins.java.api.tree.CompilationUnitTree;
 
 public class VisitorsBridgeForTests extends VisitorsBridge {
 
-  private JavaFileScannerContextForTests testContext;
+  private List<JavaFileScannerContextForTests> testContexts = new ArrayList<>();
   private JavaFileScannerContextForTests moduleContext;
-  private boolean enableSemantic = true;
+  private final boolean enableSemantic;
 
+  private VisitorsBridgeForTests(Builder builder) {
+    super(builder.visitors, builder.projectClasspath, builder.sonarComponents, builder.javaVersion, builder.inAndroidContext);
+    this.enableSemantic = builder.enableSemantic;
+  }
+
+  public static class Builder {
+    Iterable<? extends JavaCheck> visitors;
+    SonarComponents sonarComponents;
+    JavaVersion javaVersion;
+    List<File> projectClasspath;
+    boolean enableSemantic;
+    boolean inAndroidContext;
+
+    public Builder(JavaFileScanner visitor) {
+      this(Collections.singletonList(visitor));
+    }
+
+    public Builder(Iterable<? extends JavaCheck> visitors) {
+      this.visitors = visitors;
+      this.sonarComponents = null;
+      this.javaVersion = new JavaVersionImpl();
+      this.projectClasspath = Collections.emptyList();
+      this.enableSemantic = false;
+      this.inAndroidContext = false;
+    }
+
+    public Builder withJavaVersion(JavaVersion javaVersion) {
+      this.javaVersion = javaVersion;
+      return this;
+    }
+
+    public Builder withSonarComponents(SonarComponents sonarComponents) {
+      this.sonarComponents = sonarComponents;
+      return this;
+    }
+
+    public Builder enableSemanticWithProjectClasspath(List<File> projectClasspath) {
+      this.projectClasspath = projectClasspath;
+      this.enableSemantic = true;
+      return this;
+    }
+
+    public Builder withAndroidContext(boolean inAndroidContext) {
+      this.inAndroidContext = inAndroidContext;
+      return this;
+    }
+
+    public VisitorsBridgeForTests build() {
+      return new VisitorsBridgeForTests(this);
+    }
+  }
 
   @VisibleForTesting
-  public VisitorsBridgeForTests(JavaFileScanner visitor, SonarComponents sonarComponents) {
-    this(Collections.singletonList(visitor), Collections.emptyList(), sonarComponents, new JavaVersionImpl());
-  }
-
-  public VisitorsBridgeForTests(Iterable<? extends JavaCheck> visitors, @Nullable SonarComponents sonarComponents, JavaVersion javaVersion) {
-    super(visitors, Collections.emptyList(), sonarComponents, javaVersion);
-    enableSemantic = false;
-  }
-
-  public VisitorsBridgeForTests(Iterable<? extends JavaCheck> visitors, List<File> projectClasspath, @Nullable SonarComponents sonarComponents, JavaVersion javaVersion) {
-    super(visitors, projectClasspath, sonarComponents, javaVersion);
+  boolean inAndroidContext() {
+    return inAndroidContext;
   }
 
   @Override
   protected JavaFileScannerContext createScannerContext(CompilationUnitTree tree, @Nullable Sema semanticModel, SonarComponents sonarComponents, boolean failedParsing) {
     Sema model = enableSemantic ? semanticModel : null;
-    testContext = new JavaFileScannerContextForTests(tree, currentFile, model, sonarComponents, javaVersion, failedParsing, inAndroidContext, null);
+    var testContext = new JavaFileScannerContextForTests(tree, currentFile, model, sonarComponents, javaVersion, failedParsing, inAndroidContext, null);
+    testContexts.add(testContext);
     return testContext;
   }
 
   @Override
   protected InputFileScannerContext createScannerContext(
-    SonarComponents sonarComponents, InputFile inputFile, JavaVersion javaVersion, boolean inAndroidContext, CacheContext cacheContext
-  ) {
-    testContext = new JavaFileScannerContextForTests(null, inputFile, null, sonarComponents, javaVersion, false, inAndroidContext, cacheContext);
+    SonarComponents sonarComponents, InputFile inputFile, JavaVersion javaVersion, boolean inAndroidContext, CacheContext cacheContext) {
+    var testContext = new JavaFileScannerContextForTests(null, inputFile, null, sonarComponents, javaVersion, false, inAndroidContext, cacheContext);
+    testContexts.add(testContext);
     return testContext;
   }
 
@@ -82,10 +127,11 @@ public class VisitorsBridgeForTests extends VisitorsBridge {
     return moduleContext;
   }
 
-  public JavaFileScannerContextForTests lastCreatedTestContext() {
-    return testContext;
+  public List<JavaFileScannerContextForTests> testContexts() {
+    return testContexts;
   }
 
+  @CheckForNull
   public JavaFileScannerContextForTests lastCreatedModuleContext() {
     return moduleContext;
   }

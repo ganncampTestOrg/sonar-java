@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -29,7 +29,6 @@ import org.sonar.api.scan.issue.filter.FilterableIssue;
 import org.sonar.check.Rule;
 import org.sonar.java.ast.JavaAstScanner;
 import org.sonar.java.checks.verifier.TestUtils;
-import org.sonar.java.model.JavaVersionImpl;
 import org.sonar.java.testing.VisitorsBridgeForTests;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.tree.ClassTree;
@@ -176,7 +175,7 @@ class BaseTreeVisitorIssueFilterTest {
   }
 
   private static void scanFile(JavaIssueFilter filter) {
-    VisitorsBridgeForTests visitorsBridge = new VisitorsBridgeForTests(Collections.singletonList(filter), Collections.emptyList(), null, new JavaVersionImpl());
+    VisitorsBridgeForTests visitorsBridge = new VisitorsBridgeForTests.Builder(filter).build();
     JavaAstScanner.scanSingleFileForTests(INPUT_FILE, visitorsBridge);
   }
 }

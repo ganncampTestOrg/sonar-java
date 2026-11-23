@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -50,7 +50,7 @@ public class DisallowedConstructorCheck extends AbstractMethodDetection {
       } else {
         String[] trimmedArgs = new String[args.length];
         for (int i = 0; i < trimmedArgs.length; i++) {
-          trimmedArgs[i] = StringUtils.trim(args[i]);
+          trimmedArgs[i] = args[i].trim();
         }
         return invocationMatcher.addParametersMatcher(trimmedArgs).build();
       }

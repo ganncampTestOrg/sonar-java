@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -68,6 +68,7 @@ import org.sonar.plugins.java.api.tree.MethodTree;
 import org.sonar.plugins.java.api.tree.NewArrayTree;
 import org.sonar.plugins.java.api.tree.NewClassTree;
 import org.sonar.plugins.java.api.tree.NullPatternTree;
+import org.sonar.plugins.java.api.tree.ParameterizedTypeTree;
 import org.sonar.plugins.java.api.tree.ParenthesizedTree;
 import org.sonar.plugins.java.api.tree.PatternInstanceOfTree;
 import org.sonar.plugins.java.api.tree.PatternTree;
@@ -88,6 +89,7 @@ import org.sonar.plugins.java.api.tree.TypeTree;
 import org.sonar.plugins.java.api.tree.UnaryExpressionTree;
 import org.sonar.plugins.java.api.tree.VariableTree;
 import org.sonar.plugins.java.api.tree.WhileStatementTree;
+import org.sonar.plugins.java.api.tree.WildcardTree;
 import org.sonar.plugins.java.api.tree.YieldStatementTree;
 import org.sonarsource.analyzer.commons.collections.ListUtils;
 
@@ -95,7 +97,6 @@ public class CFG implements ControlFlowGraph {
 
   private static final Logger LOG = LoggerFactory.getLogger(CFG.class);
 
-  private final boolean ignoreBreakAndContinue;
   @Nullable
   private Symbol.MethodSymbol methodSymbol;
   private Block currentBlock;
@@ -133,12 +134,11 @@ public class CFG implements ControlFlowGraph {
   private Map<String, Block> labelsBreakTarget = new HashMap<>();
   private Map<String, Block> labelsContinueTarget = new HashMap<>();
 
-  private CFG(List<? extends Tree> trees, @Nullable MethodTree tree, boolean ignoreBreakAndContinue) {
+  private CFG(List<? extends Tree> trees, @Nullable MethodTree tree) {
     if (tree != null) {
       methodSymbol = tree.symbol();
       checkSymbolSemantic(methodSymbol, "method definition", tree.simpleName().identifierToken());
     }
-    this.ignoreBreakAndContinue = ignoreBreakAndContinue;
     exitBlocks.add(createBlock());
     currentBlock = createBlock(exitBlock());
     outerTry = new TryStatement();
@@ -491,18 +491,14 @@ public class CFG implements ControlFlowGraph {
     return result;
   }
 
-  public static CFG buildCFG(List<? extends Tree> trees, boolean ignoreBreak) {
-    return new CFG(trees, null, ignoreBreak);
-  }
-
   public static CFG buildCFG(List<? extends Tree> trees) {
-    return new CFG(trees, null, false);
+    return new CFG(trees, null);
   }
 
   public static CFG build(MethodTree tree) {
     BlockTree block = tree.block();
     Preconditions.checkArgument(block != null, "Cannot build CFG for method with no body.");
-    return new CFG(block.body(), tree, false);
+    return new CFG(block.body(), tree);
   }
 
   private void build(ListTree<? extends Tree> trees) {
@@ -686,6 +682,20 @@ public class CFG implements ControlFlowGraph {
         RECORD_PATTERN,
         DEFAULT_PATTERN:
         buildPattern((PatternTree) tree);
+        break;
+      case PARAMETERIZED_TYPE:
+        var typeTree = (ParameterizedTypeTree) tree;
+        build(typeTree.type());
+        build(typeTree.typeArguments());
+        break;
+      case UNBOUNDED_WILDCARD,
+           EXTENDS_WILDCARD,
+           SUPER_WILDCARD:
+        TypeTree bound = ((WildcardTree) tree).bound();
+        if (bound != null) {
+          build(bound);
+        }
+        currentBlock.elements.add(tree);
         break;
       default:
         throw new UnsupportedOperationException(tree.kind().name() + " " + ((JavaTree) tree).getLine());
@@ -906,9 +916,7 @@ public class CFG implements ControlFlowGraph {
     Block targetBlock = null;
     if (label == null) {
       if (breakTargets.isEmpty()) {
-        if (!ignoreBreakAndContinue) {
-          throw new IllegalStateException("'break' statement not in loop or switch statement");
-        }
+        markSemanticAsIncomplete("'break' statement not in loop or switch statement", tree.firstToken());
       } else {
         targetBlock = breakTargets.getLast();
       }
@@ -937,9 +945,7 @@ public class CFG implements ControlFlowGraph {
     Block targetBlock = null;
     if (label == null) {
       if (continueTargets.isEmpty()) {
-        if (!ignoreBreakAndContinue) {
-          throw new IllegalStateException("'continue' statement not in loop or switch statement");
-        }
+        markSemanticAsIncomplete("'continue' statement not in loop or switch statement", tree.firstToken());
       } else {
         targetBlock = continueTargets.getLast();
       }

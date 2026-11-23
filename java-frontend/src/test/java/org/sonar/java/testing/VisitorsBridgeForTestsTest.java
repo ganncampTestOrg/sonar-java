@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,6 +17,7 @@
 package org.sonar.java.testing;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.sonar.api.batch.fs.InputFile;
@@ -46,16 +47,21 @@ class VisitorsBridgeForTestsTest {
     sonarComponents.setSensorContext(context);
 
     Tree parse = JParserTestUtils.parse("class A{}");
-    VisitorsBridgeForTests visitorsBridgeForTests = new VisitorsBridgeForTests(Collections.singletonList(new DummyVisitor()), sonarComponents, new JavaVersionImpl());
+    VisitorsBridgeForTests visitorsBridgeForTests = new VisitorsBridgeForTests.Builder(new DummyVisitor())
+      .withSonarComponents(sonarComponents)
+      .build();
     visitorsBridgeForTests.setCurrentFile(TestUtils.emptyInputFile("dummy.java"));
     visitorsBridgeForTests.visitFile(parse, false);
-    assertThat(visitorsBridgeForTests.lastCreatedTestContext().getSemanticModel()).isNull();
+    assertThat(visitorsBridgeForTests.testContexts().get(0).getSemanticModel()).isNull();
 
     parse = JParserTestUtils.parse("class A{}");
-    visitorsBridgeForTests = new VisitorsBridgeForTests(new DummyVisitor(), sonarComponents);
+    visitorsBridgeForTests = new VisitorsBridgeForTests.Builder(new DummyVisitor())
+      .withSonarComponents(sonarComponents)
+      .enableSemanticWithProjectClasspath(new ArrayList<>())
+      .build();
     visitorsBridgeForTests.setCurrentFile(TestUtils.emptyInputFile("dummy.java"));
     visitorsBridgeForTests.visitFile(parse, false);
-    assertThat(visitorsBridgeForTests.lastCreatedTestContext().getSemanticModel()).isNotNull();
+    assertThat(visitorsBridgeForTests.testContexts().get(0).getSemanticModel()).isNotNull();
   }
 
   @Test
@@ -66,10 +72,12 @@ class VisitorsBridgeForTestsTest {
 
     Tree parse = JParserTestUtils.parse("class A{}");
     DummyVisitor javaCheck = new DummyVisitor();
-    VisitorsBridgeForTests visitorsBridgeForTests = new VisitorsBridgeForTests(Collections.singletonList(javaCheck), sonarComponents, new JavaVersionImpl());
+    VisitorsBridgeForTests visitorsBridgeForTests = new VisitorsBridgeForTests.Builder(javaCheck)
+      .withSonarComponents(sonarComponents)
+      .build();
     visitorsBridgeForTests.setCurrentFile(TestUtils.emptyInputFile("dummy.java"));
     visitorsBridgeForTests.visitFile(parse, false);
-    JavaFileScannerContextForTests lastContext = visitorsBridgeForTests.lastCreatedTestContext();
+    JavaFileScannerContextForTests lastContext = visitorsBridgeForTests.testContexts().get(0);
     assertThat(lastContext.getIssues()).isEmpty();
 
     AnalyzerMessage message = lastContext.createAnalyzerMessage(javaCheck, parse, "test");
@@ -83,23 +91,37 @@ class VisitorsBridgeForTestsTest {
   }
 
   @Test
-  void create_InputFileScannerContext_also_sets_testContext_field() {
+  void create_InputFileScannerContext_also_sets_testContexts() {
     SensorContextTester context = SensorContextTester.create(new File("")).setRuntime(SonarRuntimeImpl.forSonarLint(Version.create(6, 7)));
     SonarComponents sonarComponents = new SonarComponents(null, context.fileSystem(), null, null, null, null);
     sonarComponents.setSensorContext(context);
     DummyVisitor javaCheck = new DummyVisitor();
-    VisitorsBridgeForTests visitorsBridgeForTests = new VisitorsBridgeForTests(Collections.singletonList(javaCheck), sonarComponents, new JavaVersionImpl());
-    var inputFile = mock(InputFile.class);
+    VisitorsBridgeForTests visitorsBridgeForTests = new VisitorsBridgeForTests.Builder(javaCheck)
+      .withSonarComponents(sonarComponents)
+      .build();
+    var firstInputFile = mock(InputFile.class);
+    var secondInputFile = mock(InputFile.class);
 
-    var expectedTestContext =
-      visitorsBridgeForTests.createScannerContext(sonarComponents, inputFile, new JavaVersionImpl(), false, CacheContextImpl.of(sonarComponents));
+    var firstExpectedTestContext = visitorsBridgeForTests.createScannerContext(sonarComponents, firstInputFile, new JavaVersionImpl(), false, CacheContextImpl.of(sonarComponents));
+    var secondExpectedTestContext = visitorsBridgeForTests.createScannerContext(sonarComponents, secondInputFile, new JavaVersionImpl(), false,
+      CacheContextImpl.of(sonarComponents));
 
-    assertThat(visitorsBridgeForTests.lastCreatedTestContext()).isSameAs(expectedTestContext);
+    var testContexts = visitorsBridgeForTests.testContexts();
+    assertThat(testContexts)
+      .hasSize(2);
+
+    assertThat(testContexts.get(0))
+      .isSameAs(firstExpectedTestContext);
+
+    assertThat(testContexts.get(1))
+      .isSameAs(secondExpectedTestContext);
   }
 
   @Test
   void lastCreatedModuleContext_returns_last_created_module_context() {
-    var bridge = new VisitorsBridgeForTests(Collections.emptyList(), mock(SonarComponents.class), new JavaVersionImpl());
+    var bridge = new VisitorsBridgeForTests.Builder(Collections.emptyList())
+      .withSonarComponents(mock(SonarComponents.class))
+      .build();
     var firstModuleContext = bridge.createScannerContext(null, new JavaVersionImpl(), false, null, null);
     var secondAndExpectedModuleContext = bridge.createScannerContext(null, new JavaVersionImpl(), false, null, null);
     var firstTestContext = bridge.createScannerContext((CompilationUnitTree) null, null, null, false);
@@ -110,6 +132,16 @@ class VisitorsBridgeForTestsTest {
       .isNotSameAs(firstModuleContext)
       .isNotSameAs(firstTestContext)
       .isNotSameAs(secondTestContext);
+  }
+
+  @Test
+  void test_builder() {
+    VisitorsBridgeForTests visitorsBridge = new VisitorsBridgeForTests.Builder(Collections.emptyList())
+      .withJavaVersion(JavaVersionImpl.fromString("17"))
+      .withAndroidContext(true)
+      .build();
+    assertThat(visitorsBridge.getJavaVersion().asInt()).isEqualTo(17);
+    assertThat(visitorsBridge.inAndroidContext()).isTrue();
   }
 
   private static class DummyVisitor implements JavaFileScanner {

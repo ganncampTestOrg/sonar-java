@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -231,5 +231,10 @@ class JasperOptions implements Options {
   @Override
   public boolean getQuoteAttributeEL() {
     return false;
+  }
+
+  @Override
+  public String getUseNonstandardTagOptimizations() {
+    return "";
   }
 }

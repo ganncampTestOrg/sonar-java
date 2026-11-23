@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,9 +21,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -35,90 +33,99 @@ import javax.annotation.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.fs.InputFile;
-import org.sonar.java.annotations.VisibleForTesting;
 import org.sonar.java.ast.JavaAstScanner;
 import org.sonar.java.ast.visitors.FileLinesVisitor;
 import org.sonar.java.ast.visitors.SyntaxHighlighterVisitor;
 import org.sonar.java.caching.CacheContextImpl;
+import org.sonar.java.classpath.DependencyVersionInference;
 import org.sonar.java.collections.CollectionUtils;
 import org.sonar.java.exceptions.ApiMismatchException;
 import org.sonar.java.filters.SonarJavaIssueFilter;
 import org.sonar.java.model.JParserConfig;
 import org.sonar.java.model.VisitorsBridge;
+import org.sonar.java.telemetry.Telemetry;
+import org.sonar.java.telemetry.TelemetryKey;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.JavaResourceLocator;
 import org.sonar.plugins.java.api.JavaVersion;
 import org.sonar.plugins.java.api.ProjectContextModelReader;
-import org.sonarsource.analyzer.commons.collections.ListUtils;
 import org.sonarsource.performance.measure.PerformanceMeasure;
 import org.sonarsource.performance.measure.PerformanceMeasure.Duration;
+
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_DEPENDENCY_LOMBOK;
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_DEPENDENCY_SPRING_BOOT;
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_DEPENDENCY_SPRING_WEB;
 
 public class JavaFrontend {
 
   private static final Logger LOG = LoggerFactory.getLogger(JavaFrontend.class);
   private static final String BATCH_ERROR_MESSAGE = "Batch Mode failed, analysis of Java Files stopped.";
 
+  /** List of libraries, whose presence or absence we want to report. */
+  private static final Map<TelemetryKey, String> REPORTED_DEPENDENCIES = Map.of(
+    JAVA_DEPENDENCY_LOMBOK, "lombok",
+    JAVA_DEPENDENCY_SPRING_BOOT, "spring-boot",
+    JAVA_DEPENDENCY_SPRING_WEB, "spring-web"
+  );
+
   private final JavaVersion javaVersion;
   private final SonarComponents sonarComponents;
+  private final Telemetry telemetry;
   private final List<File> globalClasspath;
   private final JavaAstScanner astScanner;
   private final JavaAstScanner astScannerForTests;
   private final JavaAstScanner astScannerForGeneratedFiles;
   private final ProjectContextModel projectContextModel = new ProjectContextModel();
 
-  public JavaFrontend(JavaVersion javaVersion, @Nullable SonarComponents sonarComponents, @Nullable Measurer measurer,
-    JavaResourceLocator javaResourceLocator, @Nullable SonarJavaIssueFilter postAnalysisIssueFilter, JavaCheck... visitors) {
+  public JavaFrontend(JavaVersion javaVersion, SonarComponents sonarComponents, Measurer measurer, Telemetry telemetry,
+                      JavaResourceLocator javaResourceLocator, @Nullable SonarJavaIssueFilter postAnalysisIssueFilter, JavaCheck... visitors) {
     this.javaVersion = javaVersion;
     this.sonarComponents = sonarComponents;
+    this.telemetry = telemetry;
     List<JavaCheck> commonVisitors = new ArrayList<>();
     commonVisitors.add(javaResourceLocator);
     if (postAnalysisIssueFilter != null) {
       commonVisitors.add(postAnalysisIssueFilter);
     }
-    Iterable<JavaCheck> codeVisitors = ListUtils.concat(commonVisitors, Arrays.asList(visitors), List.of(new JavaProjectContextModelVisitor(projectContextModel)));
-    Collection<JavaCheck> testCodeVisitors = new ArrayList<>(commonVisitors);
-    if (measurer != null) {
-      Iterable<JavaCheck> measurers = Collections.singletonList(measurer);
-      codeVisitors = ListUtils.concat(measurers, codeVisitors);
-      testCodeVisitors.add(measurer.new TestFileMeasurer());
+
+    List<JavaCheck> codeVisitors = new ArrayList<>();
+    codeVisitors.add(measurer);
+    codeVisitors.addAll(commonVisitors);
+    codeVisitors.addAll(Arrays.asList(visitors));
+    codeVisitors.add(new JavaProjectContextModelVisitor(projectContextModel));
+
+    List<JavaCheck> testCodeVisitors = new ArrayList<>(commonVisitors);
+    testCodeVisitors.add(measurer.new TestFileMeasurer());
+
+    if (!sonarComponents.isSonarLintContext()) {
+      codeVisitors.add(new FileLinesVisitor(sonarComponents));
+      codeVisitors.add(new SyntaxHighlighterVisitor(sonarComponents));
+      testCodeVisitors.add(new SyntaxHighlighterVisitor(sonarComponents));
     }
-    List<File> classpath = new ArrayList<>();
-    List<File> testClasspath = new ArrayList<>();
-    List<JavaCheck> jspCodeVisitors = new ArrayList<>();
-    List<File> jspClasspath = new ArrayList<>();
-    boolean inAndroidContext = false;
-    if (sonarComponents != null) {
-      if (!sonarComponents.isSonarLintContext()) {
-        codeVisitors = ListUtils.concat(codeVisitors, Arrays.asList(new FileLinesVisitor(sonarComponents), new SyntaxHighlighterVisitor(sonarComponents)));
-        testCodeVisitors.add(new SyntaxHighlighterVisitor(sonarComponents));
-      }
-      classpath = sonarComponents.getJavaClasspath();
-      testClasspath = sonarComponents.getJavaTestClasspath();
-      jspClasspath = sonarComponents.getJspClasspath();
-      testCodeVisitors.addAll(sonarComponents.testChecks());
-      jspCodeVisitors = sonarComponents.jspChecks();
-      inAndroidContext = sonarComponents.inAndroidContext();
-    }
+    List<File> classpath = sonarComponents.getJavaClasspath();
+    List<File> testClasspath = sonarComponents.getJavaTestClasspath();
+    List<File> jspClasspath = sonarComponents.getJspClasspath();
+    testCodeVisitors.addAll(sonarComponents.testChecks());
+    List<JavaCheck> jspCodeVisitors = sonarComponents.jspChecks();
+    boolean inAndroidContext = sonarComponents.inAndroidContext();
+
     globalClasspath = Stream.of(classpath, testClasspath, jspClasspath)
       .flatMap(Collection::stream).distinct().toList();
 
     //AstScanner for main files
-    astScanner = new JavaAstScanner(sonarComponents);
-    astScanner.setVisitorBridge(createVisitorBridge(codeVisitors, classpath, javaVersion, sonarComponents, inAndroidContext));
+    astScanner = new JavaAstScanner(sonarComponents, telemetry, TelemetryKey.JAVA_ANALYSIS_MAIN);
+    astScanner.setVisitorBridge(new VisitorsBridge(codeVisitors, classpath, sonarComponents, javaVersion, inAndroidContext));
 
     //AstScanner for test files
-    astScannerForTests = new JavaAstScanner(sonarComponents);
-    astScannerForTests.setVisitorBridge(createVisitorBridge(testCodeVisitors, testClasspath, javaVersion, sonarComponents, inAndroidContext));
+    astScannerForTests = new JavaAstScanner(sonarComponents, telemetry, TelemetryKey.JAVA_ANALYSIS_TEST);
+    astScannerForTests.setVisitorBridge(new VisitorsBridge(testCodeVisitors, testClasspath, sonarComponents, javaVersion, inAndroidContext));
 
     //AstScanner for generated files
-    astScannerForGeneratedFiles = new JavaAstScanner(sonarComponents);
-    astScannerForGeneratedFiles.setVisitorBridge(createVisitorBridge(jspCodeVisitors, jspClasspath, javaVersion, sonarComponents, inAndroidContext));
+    astScannerForGeneratedFiles = new JavaAstScanner(sonarComponents, telemetry, TelemetryKey.JAVA_ANALYSIS_GENERATED);
+    astScannerForGeneratedFiles.setVisitorBridge(new VisitorsBridge(jspCodeVisitors, jspClasspath, sonarComponents, javaVersion, inAndroidContext));
   }
 
   private void visitPropertiesFiles() {
-    if (sonarComponents == null) {
-      return;
-    }
     for (InputFile propertiesFile : sonarComponents.getPropertiesFiles()) {
       try (var is = propertiesFile.inputStream()) {
         var properties = new Properties();
@@ -128,18 +135,6 @@ public class JavaFrontend {
         LOG.debug("Failed to read properties file: {}", propertiesFile.filename());
       }
     }
-  }
-
-  private static VisitorsBridge createVisitorBridge(
-    Iterable<JavaCheck> codeVisitors, List<File> classpath, JavaVersion javaVersion, @Nullable SonarComponents sonarComponents, boolean inAndroidContext) {
-    VisitorsBridge visitorsBridge = new VisitorsBridge(codeVisitors, classpath, sonarComponents, javaVersion);
-    visitorsBridge.setInAndroidContext(inAndroidContext);
-    return visitorsBridge;
-  }
-
-  @VisibleForTesting
-  boolean analysisCancelled() {
-    return sonarComponents != null && sonarComponents.analysisCancelled();
   }
 
   public void scan(Iterable<InputFile> sourceFiles, Iterable<InputFile> testFiles, Iterable<? extends InputFile> generatedFiles) {
@@ -172,28 +167,37 @@ public class JavaFrontend {
     }
 
     // SonarLint is not compatible with batch mode, it needs InputFile#contents() and batch mode use InputFile#absolutePath()
-    boolean isSonarLint = sonarComponents != null && sonarComponents.isSonarLintContext();
-    boolean fileByFileMode = isSonarLint || isFileByFileEnabled();
+    boolean fileByFileMode = sonarComponents.isSonarLintContext() || sonarComponents.isFileByFileEnabled();
     if (fileByFileMode) {
       scanAndMeasureTask(sourceFiles, inputFiles -> astScanner.scan(inputFiles, projectContextModel), "Main");
       scanAndMeasureTask(testFiles, astScannerForTests::scan, "Test");
       scanAndMeasureTask(generatedFiles, astScannerForGeneratedFiles::scan, "Generated");
-    } else if (isAutoScan()) {
+    } else if (sonarComponents.isAutoScan()) {
       scanAsBatch(new AutoScanBatchContext(), sourceFiles, testFiles);
     } else {
       scanAsBatch(new DefaultBatchModeContext(astScanner, "Main"), sourceFiles);
       scanAsBatch(new DefaultBatchModeContext(astScannerForTests, "Test"), testFiles);
       scanAsBatch(new DefaultBatchModeContext(astScannerForGeneratedFiles, "Generated"), generatedFiles);
     }
+
+    DependencyVersionInference dependencyService = new DependencyVersionInference();
+    for (Map.Entry<TelemetryKey, String> dep : REPORTED_DEPENDENCIES.entrySet()) {
+      dependencyService
+        .infer(dep.getValue(), globalClasspath)
+        .ifPresentOrElse(
+          version -> telemetry.aggregateAsSortedSet(dep.getKey(), version.toString()),
+          () -> telemetry.aggregateAsSortedSet(dep.getKey())
+        );
+    }
   }
 
   /**
    * Scans the files given as input in batch mode.
-   * <p>
+   *
    * The batch size used is determined by configuration.
    * This batch size is then used as a threshold: files are added to a batch until the threshold is passed.
    * Once the threshold is passed, the batch is processed for analysis.
-   * <p>
+   *
    * If no batch size is configured, the input files are scanned as a single batch.
    *
    * @param inputFiles The collections of files to scan
@@ -229,7 +233,7 @@ public class JavaFrontend {
   private void scanInBatches(BatchModeContext context, List<InputFile> allInputFiles) {
     String logUsingBatch = String.format("Using ECJ batch to parse %d %s java source files", allInputFiles.size(), context.descriptor());
     AnalysisProgress analysisProgress = new AnalysisProgress(allInputFiles.size());
-    long batchModeSizeInKB = getBatchModeSizeInKB();
+    long batchModeSizeInKB = sonarComponents.getBatchModeSizeInKB();
     if (batchModeSizeInKB < 0L || batchModeSizeInKB >= Long.MAX_VALUE / 1_000L) {
       LOG.info("{} in a single batch.", logUsingBatch);
       scanBatch(context, allInputFiles, analysisProgress);
@@ -247,10 +251,9 @@ public class JavaFrontend {
   private <T extends InputFile> void scanBatch(BatchModeContext context, List<T> batchFiles, AnalysisProgress analysisProgress) {
     analysisProgress.startBatch(batchFiles.size());
     Set<Runnable> environmentsCleaners = new HashSet<>();
-    boolean shouldIgnoreUnnamedModuleForSplitPackage = sonarComponents != null && sonarComponents.shouldIgnoreUnnamedModuleForSplitPackage();
     JParserConfig.Mode.BATCH
-      .create(javaVersion, context.getClasspath(), shouldIgnoreUnnamedModuleForSplitPackage)
-      .parse(batchFiles, this::analysisCancelled, analysisProgress, (input, result) -> scanAsBatchCallback(input, result, context, environmentsCleaners));
+      .create(javaVersion, context.getClasspath(), sonarComponents.shouldIgnoreUnnamedModuleForSplitPackage())
+      .parse(batchFiles, sonarComponents::analysisCancelled, analysisProgress, (input, result) -> scanAsBatchCallback(input, result, context, environmentsCleaners));
     // Due to a bug in ECJ, JAR files remain locked after the analysis on Windows, we unlock them manually, at the end of each batches. See SONARJAVA-3609.
     environmentsCleaners.forEach(Runnable::run);
     analysisProgress.endBatch();
@@ -345,75 +348,13 @@ public class JavaFrontend {
 
   }
 
-  static class BatchGenerator {
-    public final long batchSizeInBytes;
-    private final Iterator<InputFile> source;
-    private InputFile buffer = null;
-
-
-    public BatchGenerator(Iterator<InputFile> source, long batchSizeInBytes) {
-      this.source = source;
-      this.batchSizeInBytes = batchSizeInBytes;
-    }
-
-    public boolean hasNext() {
-      return buffer != null || source.hasNext();
-    }
-
-    public List<InputFile> next() {
-      List<InputFile> batch = clearBuffer();
-      long batchSize = batch.isEmpty() ? 0L : batch.get(0).file().length();
-      while (source.hasNext() && batchSize <= batchSizeInBytes) {
-        buffer = source.next();
-        batchSize += buffer.file().length();
-        if (batchSize > batchSizeInBytes) {
-          // If the batch is empty, we clear the value from the buffer and add it to the batch
-          if (batch.isEmpty()) {
-            batch.add(buffer);
-            buffer = null;
-          }
-          // If the last inputFile does not fit into the non-empty batch, we keep it in the buffer for the next call
-          return batch;
-        }
-        batch.add(buffer);
-      }
-      buffer = null;
-      return batch;
-    }
-
-    private List<InputFile> clearBuffer() {
-      if (buffer == null) {
-        return new ArrayList<>();
-      }
-      List<InputFile> batch = new ArrayList<>();
-      batch.add(buffer);
-      buffer = null;
-      return batch;
-    }
-  }
-
-  @VisibleForTesting
-  boolean isFileByFileEnabled() {
-    return sonarComponents != null && sonarComponents.isFileByFileEnabled();
-  }
-
-  @VisibleForTesting
-  boolean isAutoScan() {
-    return sonarComponents != null && sonarComponents.isAutoScan();
-  }
-
-  @VisibleForTesting
-  long getBatchModeSizeInKB() {
-    return sonarComponents == null ? -1L : sonarComponents.getBatchModeSizeInKB();
-  }
-
   private boolean isCacheEnabled() {
-    return sonarComponents != null && CacheContextImpl.of(sonarComponents).isCacheEnabled();
+    return CacheContextImpl.of(sonarComponents).isCacheEnabled();
   }
 
   private boolean canOptimizeScanning() {
     try {
-      return sonarComponents != null && sonarComponents.canSkipUnchangedFiles() && isCacheEnabled();
+      return sonarComponents.canSkipUnchangedFiles() && isCacheEnabled();
     } catch (ApiMismatchException e) {
       return false;
     }

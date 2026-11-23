@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -34,11 +34,13 @@ import org.sonar.api.batch.sensor.highlighting.TypeOfText;
 import org.sonar.api.batch.sensor.internal.SensorContextTester;
 import org.sonar.api.measures.FileLinesContextFactory;
 import org.sonar.java.JavaFrontend;
+import org.sonar.java.Measurer;
 import org.sonar.java.SonarComponents;
 import org.sonar.java.TestUtils;
 import org.sonar.java.classpath.ClasspathForMain;
 import org.sonar.java.classpath.ClasspathForTest;
 import org.sonar.java.model.JParserConfig;
+import org.sonar.java.telemetry.NoOpTelemetry;
 import org.sonar.plugins.java.api.JavaVersion;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +48,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.sonar.java.TestUtils.mockSonarComponents;
 
 @EnableRuleMigrationSupport
 class SyntaxHighlighterVisitorTest {
@@ -253,7 +256,7 @@ class SyntaxHighlighterVisitorTest {
 
   private void scan(InputFile inputFile) {
     JavaVersion javaVersion = JParserConfig.MAXIMUM_SUPPORTED_JAVA_VERSION;
-    JavaFrontend frontend = new JavaFrontend(javaVersion, null, null, null, null, syntaxHighlighterVisitor);
+    JavaFrontend frontend = new JavaFrontend(javaVersion, mockSonarComponents(), mock(Measurer.class), new NoOpTelemetry(), null, null, syntaxHighlighterVisitor);
     frontend.scan(Collections.singletonList(inputFile), Collections.emptyList(), Collections.emptyList());
   }
 

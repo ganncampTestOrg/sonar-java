@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,6 +47,7 @@ import org.sonar.java.model.expression.MemberSelectExpressionTreeImpl;
 import org.sonar.java.model.expression.MethodInvocationTreeImpl;
 import org.sonar.java.model.expression.MethodReferenceTreeImpl;
 import org.sonar.java.model.expression.NewClassTreeImpl;
+import org.sonar.java.model.location.InternalRange;
 import org.sonar.java.model.statement.BlockTreeImpl;
 import org.sonar.java.model.statement.BreakStatementTreeImpl;
 import org.sonar.java.model.statement.ContinueStatementTreeImpl;
@@ -58,6 +59,7 @@ import org.sonar.java.model.statement.StaticInitializerTreeImpl;
 import org.sonar.java.model.statement.SwitchExpressionTreeImpl;
 import org.sonar.java.model.statement.YieldStatementTreeImpl;
 import org.sonar.plugins.java.api.JavaVersion;
+import org.sonar.plugins.java.api.location.Position;
 import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.semantic.Symbol.MethodSymbol;
 import org.sonar.plugins.java.api.semantic.SymbolMetadata;
@@ -86,6 +88,7 @@ import org.sonar.plugins.java.api.tree.SwitchStatementTree;
 import org.sonar.plugins.java.api.tree.Tree;
 import org.sonar.plugins.java.api.tree.TryStatementTree;
 import org.sonar.plugins.java.api.tree.TypeCastTree;
+import org.sonar.plugins.java.api.tree.TypeParameterTree;
 import org.sonar.plugins.java.api.tree.TypeTree;
 import org.sonar.plugins.java.api.tree.VariableTree;
 import org.sonar.plugins.java.api.tree.YieldStatementTree;
@@ -1486,13 +1489,59 @@ class JParserSemanticTest {
 
   @Test
   void type_union() {
-    CompilationUnitTree cu = test("class C { void m() { try { } catch (E1 | E2 v) { } } }");
+    CompilationUnitTree cu = test("class C { void m() { try { } catch (MatchException | NumberFormatException v) { } } }");
     ClassTree c = (ClassTree) cu.types().get(0);
     MethodTree m = (MethodTree) c.members().get(0);
     TryStatementTree s = (TryStatementTree) m.block().body().get(0);
     VariableTreeImpl v = (VariableTreeImpl) s.catches().get(0).parameter();
     AbstractTypedTree t = (AbstractTypedTree) v.type();
     assertThat(t.typeBinding).isNotNull();
+    Type symbolType = t.symbolType();
+    assertThat(symbolType).isNotNull();
+    assertThat(symbolType.isUnknown()).isFalse();
+    // "fullyQualifiedName()" should be unique for each different type, like for example "java.lang.MatchException | java.lang.NumberFormatException"
+    // this will be fixed by SONARJAVA-5718
+    assertThat(symbolType.fullyQualifiedName()).isEqualTo("java.lang.RuntimeException");
+    assertThat(symbolType.getIntersectionTypes()).extracting(Type::fullyQualifiedName)
+      .containsExactly("java.lang.RuntimeException");
+  }
+
+  @Test
+  void type_intersection_in_cast_expression() {
+    CompilationUnitTree cu = test("class C { void m(Object o) { var x = (AutoCloseable & Cloneable & Comparable<? extends Runnable>) o; } }");
+    ClassTree c = (ClassTree) cu.types().get(0);
+    MethodTree m = (MethodTree) c.members().get(0);
+    VariableTreeImpl v = (VariableTreeImpl) m.block().body().get(0);
+    AbstractTypedTree t = (AbstractTypedTree) v.type();
+    assertThat(t.typeBinding).isNotNull();
+    Type symbolType = t.symbolType();
+    assertThat(symbolType).isNotNull();
+    assertThat(symbolType.fullyQualifiedName()).isEqualTo("java.lang.AutoCloseable & java.lang.Cloneable & java.lang.Comparable");
+    assertThat(symbolType.isSubtypeOf("java.lang.AutoCloseable")).isTrue();
+    assertThat(symbolType.isSubtypeOf("java.lang.Cloneable")).isTrue();
+    assertThat(symbolType.isSubtypeOf("java.lang.Comparable")).isTrue();
+    assertThat(symbolType.isSubtypeOf("java.lang.Number")).isFalse();
+    assertThat(symbolType.isIntersectionType()).isTrue();
+    assertThat(symbolType.getIntersectionTypes()).extracting(Type::fullyQualifiedName)
+      .containsExactly(
+      "java.lang.AutoCloseable",
+      "java.lang.Cloneable",
+      "java.lang.Comparable");
+  }
+
+  @Test
+  void type_intersection_in_generic() {
+    CompilationUnitTree cu = test("class C<T extends AutoCloseable & Cloneable> { }");
+    ClassTree c = (ClassTree) cu.types().get(0);
+    TypeParameterTree typeParameterTree = c.typeParameters().get(0);
+    Type symbolType =  typeParameterTree.symbol().type();
+    assertThat(symbolType.isParameterized()).isFalse();
+    assertThat(symbolType.fullyQualifiedName()).isEqualTo("T");
+    assertThat(symbolType.isSubtypeOf("java.lang.AutoCloseable")).isTrue();
+    assertThat(symbolType.isSubtypeOf("java.lang.Cloneable")).isTrue();
+    assertThat(symbolType.isSubtypeOf("java.lang.Number")).isFalse();
+    assertThat(symbolType.isIntersectionType()).isFalse();
+    assertThat(symbolType.getIntersectionTypes()).extracting(Type::fullyQualifiedName).containsExactly("T");
   }
 
   /**
@@ -1544,6 +1593,11 @@ class JParserSemanticTest {
     assertThat(s.isTypeSymbol())
       .isEqualTo(i.symbol().isTypeSymbol())
       .isFalse();
+
+    assertThat(i.symbolType().isIntersectionType()).isFalse();
+    assertThat(i.symbolType().getIntersectionTypes())
+      .extracting(Type::fullyQualifiedName)
+      .containsExactly("Recovered#typeBindingLUnknownInterface;0");
   }
 
   @Test
@@ -2013,5 +2067,78 @@ class JParserSemanticTest {
     assertNotEquals(pOfA.symbol(), pOfC.symbol());
     assertNotEquals(pOfB.symbol(), pOfC.symbol());
 
+  }
+
+  @Test
+  void testImportModule() {
+    String source = """
+      package com.example;
+
+      import module java.base;
+
+      import static java.sql.Connection.TRANSACTION_NONE;
+
+      public class Source {
+        List<Integer> xs = new ArrayList<>();
+        Set<Integer> ys = new HashSet<>();
+      }
+      """;
+
+    JavaTree.CompilationUnitTreeImpl cu = test(source);
+
+    JavaTree.ImportTreeImpl importModule = (JavaTree.ImportTreeImpl) cu.imports().get(0);
+
+    assertThat(importModule.isModule()).isTrue();
+    assertThat(importModule.isStatic()).isFalse();
+    assertThat(importModule.symbol()).isNull();
+
+    MemberSelectExpressionTree javaBase = (MemberSelectExpressionTree) importModule.qualifiedIdentifier();
+    assertThat(javaBase.identifier().name()).isEqualTo("base");
+
+    assertThat(importModule.moduleKeyword().range()).isEqualTo(
+      new InternalRange(Position.at(3, 8), Position.at(3, 14))
+    );
+
+    JavaTree.ImportTreeImpl importConst = (JavaTree.ImportTreeImpl) cu.imports().get(1);
+    assertThat(importConst.isModule()).isFalse();
+  }
+
+  @Test
+  void compactSource_simple() {
+    String source = """
+      void main() {
+      }
+    """;
+    JavaTree.CompilationUnitTreeImpl cu = test(source);
+    assertThat(cu.types()).hasSize(1);
+    ClassTreeImpl clazz = (ClassTreeImpl) cu.types().get(0);
+    assertThat(clazz).isNotNull();
+    assertThat(clazz.kind()).isEqualTo(Tree.Kind.IMPLICIT_CLASS);
+    assertThat(clazz.simpleName()).isNull();
+    assertThat(clazz.openBraceToken()).isNull();
+    assertThat(clazz.closeBraceToken()).isNull();
+  }
+
+  @Test
+  void compactSource_complex() {
+    String source = """
+      void main() {
+        System.out.println("Hello, World!");
+      }
+      int i = 43;
+      class Helper {
+        void help() {
+          System.out.println("Helping...");
+        }
+      }
+    """;
+    JavaTree.CompilationUnitTreeImpl cu = test(source);
+    ClassTreeImpl clazz = (ClassTreeImpl) cu.types().get(0);
+    assertThat(clazz).isNotNull();
+    assertThat(clazz.kind()).isEqualTo(Tree.Kind.IMPLICIT_CLASS);
+    assertThat(clazz.members()).hasSize(3);
+    assertThat(clazz.members().get(0).kind()).isEqualTo(Tree.Kind.METHOD);
+    assertThat(clazz.members().get(1).kind()).isEqualTo(Tree.Kind.VARIABLE);
+    assertThat(clazz.members().get(2).kind()).isEqualTo(Tree.Kind.CLASS);
   }
 }

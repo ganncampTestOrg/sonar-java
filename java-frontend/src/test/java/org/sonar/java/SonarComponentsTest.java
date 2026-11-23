@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.LongSupplier;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -140,7 +142,7 @@ class SonarComponentsTest {
   private SensorContext context;
 
   @RegisterExtension
-  public ThreadLocalLogTester logTester = new ThreadLocalLogTester().setLevel(Level.DEBUG);
+  public ThreadLocalLogTester logTester = new ThreadLocalLogTester();
 
   @BeforeEach
   void setUp() {
@@ -980,6 +982,7 @@ class SonarComponentsTest {
   @ParameterizedTest
   @MethodSource("fileCanBeSkipped_only_logs_on_first_call_input")
   void fileCanBeSkipped_only_logs_on_the_first_call(SonarComponents sonarComponents, InputFile inputFile, String logMessage) throws IOException {
+    logTester.setLevel(Level.INFO);
     assertThat(logTester.logs(Level.INFO)).isEmpty();
 
     SensorContext contextMock = mock(SensorContext.class);
@@ -1063,6 +1066,23 @@ class SonarComponentsTest {
     assertThat(sonarComponents.shouldIgnoreUnnamedModuleForSplitPackage()).isTrue();
   }
 
+  @Test
+  void shouldFailOnStackOverflow_returns_true_by_default() {
+    MapSettings settings = new MapSettings();
+    SonarComponents sonarComponents = new SonarComponents(null, null, null, null, null, null);
+    sonarComponents.setSensorContext(SensorContextTester.create(new File("")).setSettings(settings));
+    assertThat(sonarComponents.shouldFailOnStackOverflow()).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"true", "false"})
+  void shouldFailOnStackOverflow_returns_correct_value_when_set(String value) {
+    MapSettings settings = new MapSettings().setProperty("sonar.java.internal.failOnStackOverflow", value);
+    SonarComponents sonarComponents = new SonarComponents(null, null, null, null, null, null);
+    sonarComponents.setSensorContext(SensorContextTester.create(new File("")).setSettings(settings));
+    assertThat(sonarComponents.shouldFailOnStackOverflow()).isEqualTo(Boolean.valueOf(value));
+  }
+
   @Nested
   class Logging {
     private final DecimalFormat formatter = new DecimalFormat("00");
@@ -1087,6 +1107,7 @@ class SonarComponentsTest {
 
     @Test
     void log_only_50_undefined_types() {
+      logTester.setLevel(Level.DEBUG);
       String source = generateSource(26);
 
       // artificially populated the semantic errors with 26 unknown types and 52 errors
@@ -1131,6 +1152,7 @@ class SonarComponentsTest {
 
     @Test
     void log_all_undefined_types_if_less_than_threshold() {
+      logTester.setLevel(Level.DEBUG);
       String source = generateSource(1);
 
       // artificially populated the semantic errors with 1 unknown types and 2 errors
@@ -1155,6 +1177,7 @@ class SonarComponentsTest {
 
     @Test
     void suspicious_empty_libraries_should_be_logged() {
+      logTester.setLevel(Level.INFO);
       logUndefinedTypesWithOneMainAndOneTest();
 
       assertThat(logTester.logs(Level.WARN))
@@ -1166,6 +1189,7 @@ class SonarComponentsTest {
 
     @Test
     void suspicious_empty_libraries_should_not_be_logged_in_autoscan() {
+      logTester.setLevel(Level.INFO);
       // Enable autoscan with a property
       context.setSettings(new MapSettings().setProperty(SonarComponents.SONAR_AUTOSCAN, true));
 
@@ -1180,6 +1204,7 @@ class SonarComponentsTest {
 
     @Test
     void log_problems_with_list_of_paths_of_files_affected() {
+      logTester.setLevel(Level.DEBUG);
       String source = generateSource(1);
 
       // Add one test and one main file
@@ -1284,6 +1309,7 @@ class SonarComponentsTest {
   void moduleKey_empty() {
     var sonarComponents = new SonarComponents(null, null, null, null, null, null);
     assertThat(sonarComponents.getModuleKey()).isEmpty();
+    assertThat(sonarComponents.getFullyQualifiedModuleKey()).isEmpty();
   }
 
   @Test
@@ -1291,13 +1317,21 @@ class SonarComponentsTest {
     var rootProj = mock(ProjectDefinition.class);
     doReturn(new File("/foo/bar/proj")).when(rootProj).getBaseDir();
     var parentModule = mock(ProjectDefinition.class);
+    var parentProperties = new HashMap<String, String>();
+    parentProperties.put("sonar.moduleKey", "proj1:pmodule");
+    when(parentModule.properties()).thenReturn(parentProperties);
     doReturn(rootProj).when(parentModule).getParent();
     var childModule = mock(ProjectDefinition.class);
+    var childProperties = new HashMap<String, String>();
+    childProperties.put("sonar.moduleKey", "proj1:pmodule:cmodule");
+    when(childModule.properties()).thenReturn(childProperties);
     doReturn(new File("/foo/bar/proj/pmodule/cmodule")).when(childModule).getBaseDir();
     doReturn(parentModule).when(childModule).getParent();
 
     var sonarComponents = new SonarComponents(null, null, null, null, null, null, childModule);
     assertThat(sonarComponents.getModuleKey()).isEqualTo("pmodule/cmodule");
+    assertThat(sonarComponents.getFullyQualifiedModuleKey()).isPresent();
+    assertThat(sonarComponents.getFullyQualifiedModuleKey()).contains("pmodule:cmodule");
   }
 
   @Rule(key = "jsp")
@@ -1372,4 +1406,17 @@ class SonarComponentsTest {
 
     assertThat(sonarComponentsWithSonarLintCache02.sonarLintCache()).isSameAs(sonarLintCache);
   }
+
+  @Test
+  void test_getConfiguration() {
+    var settings = new MapSettings();
+    var sonarComponents = new SonarComponents(null, null, null, null, null, null);
+    sonarComponents.setSensorContext(SensorContextTester.create(new File("")).setSettings(settings));
+
+    var configuration = sonarComponents.getConfiguration();
+    assertThat(configuration)
+      .isNotNull()
+      .isInstanceOf(Configuration.class);
+  }
+
 }

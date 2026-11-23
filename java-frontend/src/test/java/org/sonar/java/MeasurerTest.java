@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,10 +25,11 @@ import org.sonar.api.batch.sensor.internal.SensorContextTester;
 import org.sonar.api.issue.NoSonarFilter;
 import org.sonar.api.utils.PathUtils;
 import org.sonar.java.model.JavaVersionImpl;
-import org.sonar.plugins.java.api.JavaCheck;
+import org.sonar.java.telemetry.NoOpTelemetry;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.sonar.java.TestUtils.mockSonarComponents;
 
 class MeasurerTest {
 
@@ -77,6 +78,11 @@ class MeasurerTest {
   }
 
   @Test
+  void verify_compact_source() {
+    checkMetric("CompactSource.java", "classes", 1);
+  }
+
+  @Test
   void verify_ncloc_metric() {
     checkMetric("LinesOfCode.java", "ncloc", 2);
     checkMetric("CommentedOutFile.java", "ncloc", 0);
@@ -92,7 +98,7 @@ class MeasurerTest {
     context.fileSystem().add(inputFile);
 
     Measurer measurer = new Measurer(context, mock(NoSonarFilter.class));
-    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), null, measurer, null, null, new JavaCheck[0]);
+    JavaFrontend frontend = new JavaFrontend(new JavaVersionImpl(), mockSonarComponents(), measurer, new NoOpTelemetry(), null, null);
 
     frontend.scan(Collections.singletonList(inputFile), Collections.emptyList(), Collections.emptyList());
 

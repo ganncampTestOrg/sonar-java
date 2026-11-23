@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,10 +21,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.sonar.java.TestUtils;
 import org.sonar.java.ast.JavaAstScanner;
-import org.sonar.java.model.JavaVersionImpl;
 import org.sonar.java.reporting.AnalyzerMessage;
 import org.sonar.java.testing.VisitorsBridgeForTests;
 import org.sonar.plugins.java.api.tree.ClassTree;
@@ -33,20 +31,21 @@ import org.sonar.plugins.java.api.tree.Tree;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 class IssuableSubscriptionVisitorTest {
 
   @Test
   void test_custom_rules_report_issues() {
-    VisitorsBridgeForTests visitorsBridge = new VisitorsBridgeForTests(Collections.singletonList(new CustomRule()), new ArrayList<>(), null, new JavaVersionImpl());
+    VisitorsBridgeForTests visitorsBridge = new VisitorsBridgeForTests.Builder(new CustomRule()).build();
     JavaAstScanner.scanSingleFileForTests(TestUtils.inputFile("src/test/resources/IssuableSubscriptionClass.java"), visitorsBridge);
-    Set<AnalyzerMessage> issues = visitorsBridge.lastCreatedTestContext().getIssues();
+    Set<AnalyzerMessage> issues = visitorsBridge.testContexts().get(0).getIssues();
     assertThat(issues).hasSize(8);
   }
 
   @Test
   void check_issuable_subscription_visitor_does_not_visit_tree_on_its_own() {
-    CompilationUnitTree tree = Mockito.mock(CompilationUnitTree.class);
+    CompilationUnitTree tree = mock(CompilationUnitTree.class);
     CustomRule visitor = new CustomRule();
     assertThatThrownBy(() -> visitor.scanTree(tree))
       .isInstanceOf(UnsupportedOperationException.class)
@@ -56,7 +55,7 @@ class IssuableSubscriptionVisitorTest {
   @Test
   void issuable_subscription_visitor_does_not_visit_file_on_its_own() {
     CustomRule visitor = new CustomRule();
-    JavaFileScannerContext context = Mockito.mock(JavaFileScannerContext.class);
+    JavaFileScannerContext context = mock(JavaFileScannerContext.class);
     assertThatThrownBy(() -> visitor.scanFile(context))
       .isInstanceOf(UnsupportedOperationException.class)
       .hasMessage("IssuableSubscriptionVisitor should not drive visit of file. Use leaveFile() instead.");
@@ -80,14 +79,13 @@ class IssuableSubscriptionVisitorTest {
       reportIssue(tree, tree, "issue from tree to tree");
 
       CompilationUnitTree cut = (CompilationUnitTree) tree;
-      for(Tree type : cut.types()) {
-        if(type instanceof ClassTree ct){
+      for (Tree type : cut.types()) {
+        if (type instanceof ClassTree ct) {
           reportIssue(ct.members().get(0),
-            ct.members().get(ct.members().size()-1),
+            ct.members().get(ct.members().size() - 1),
             "issue on type",
             List.of(new JavaFileScannerContext.Location("", ct)),
-            null
-            );
+            null);
         }
       }
 

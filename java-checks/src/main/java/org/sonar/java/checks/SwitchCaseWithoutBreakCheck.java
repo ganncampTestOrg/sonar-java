@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -47,7 +47,7 @@ public class SwitchCaseWithoutBreakCheck extends IssuableSubscriptionVisitor {
   public void visitNode(Tree tree) {
     SwitchStatementTree switchStatementTree = (SwitchStatementTree) tree;
     Set<CaseGroupTree> caseGroupTrees = new HashSet<>(switchStatementTree.cases());
-    CFG cfg = CFG.buildCFG(Collections.singletonList(tree), true);
+    CFG cfg = CFG.buildCFG(Collections.singletonList(tree));
     Set<CFG.Block> switchSuccessors = cfg.entryBlock().successors();
 
     Map<CFG.Block, CaseGroupTree> cfgBlockToCaseGroupMap = createMapping(switchSuccessors, caseGroupTrees);

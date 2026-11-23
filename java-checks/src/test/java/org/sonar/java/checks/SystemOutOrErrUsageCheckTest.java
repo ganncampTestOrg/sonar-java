@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -28,5 +28,21 @@ class SystemOutOrErrUsageCheckTest {
       .onFile(mainCodeSourcesPath("checks/SystemOutOrErrUsageCheckSample.java"))
       .withCheck(new SystemOutOrErrUsageCheck())
       .verifyIssues();
+  }
+
+  @Test
+  void test_compact_source_file() {
+    CheckVerifier.newVerifier()
+      .onFile(mainCodeSourcesPath("checks/SystemOutOrErrUsageCheckCompactOnlyMainSample.java"))
+      .withCheck(new SystemOutOrErrUsageCheck())
+      .verifyNoIssues();
+  }
+
+  @Test
+  void test_compact_source_file_with_regular_class() {
+    CheckVerifier.newVerifier()
+      .onFile(mainCodeSourcesPath("checks/SystemOutOrErrUsageCheckCompactWithClassSample.java"))
+      .withCheck(new SystemOutOrErrUsageCheck())
+      .verifyNoIssues();
   }
 }

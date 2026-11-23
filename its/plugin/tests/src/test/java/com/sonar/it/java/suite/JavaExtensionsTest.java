@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2013-2025 SonarSource SA
+ * Copyright (C) 2013-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ public class JavaExtensionsTest {
 
   @Test
   public void test() {
-    MavenBuild build = MavenBuild.create(TestUtils.projectPom("java-extension"))
+    MavenBuild build = TestUtils.createMavenBuild().setPom(TestUtils.projectPom("java-extension"))
       .setCleanSonarGoals();
     TestUtils.provisionProject(orchestrator, "org.sonarsource.it.projects:java-extension","java-extension","java","java-extension");
     orchestrator.executeBuild(build);

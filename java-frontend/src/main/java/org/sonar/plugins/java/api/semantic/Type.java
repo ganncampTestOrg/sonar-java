@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -281,5 +281,22 @@ public interface Type {
     Type elementType();
 
   }
+
+  /**
+   * Check if this type is an intersection type. For example, return true for the type of 'x' in the following code:
+   * <code><pre>
+   *   var x = (AutoCloseable & Cloneable) obj;
+   *</pre></code>
+   */
+  boolean isIntersectionType();
+
+  /**
+   * This method returns more than one type when {@link #isIntersectionType()} is true. For example, it
+   * returns {@code ["java.lang.AutoCloseable", "java.lang.Cloneable"] } for the type of 'x' in the following code:
+   * <code><pre>
+   *   var x = (AutoCloseable & Cloneable) obj;
+   *</pre></code>
+   */
+  Type[] getIntersectionTypes();
 
 }

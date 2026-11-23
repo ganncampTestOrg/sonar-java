@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2013-2025 SonarSource SA
+ * Copyright (C) 2013-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -38,7 +38,7 @@ public class JavaComplexityTest {
 
   @BeforeClass
   public static void analyzeProject() {
-    MavenBuild build = MavenBuild.create(TestUtils.projectPom("java-complexity"))
+    MavenBuild build = TestUtils.createMavenBuild().setPom(TestUtils.projectPom("java-complexity"))
       .setCleanSonarGoals()
       .setProperty("sonar.dynamicAnalysis", "false")
       .setProperty("sonar.java.binaries", "target");

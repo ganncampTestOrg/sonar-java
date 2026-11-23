@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -26,6 +26,14 @@ class FieldDependencyInjectionCheckTest {
   void test() {
     CheckVerifier.newVerifier()
       .onFile(mainCodeSourcesPath("checks/spring/FieldDependencyInjectionCheckSample.java"))
+      .withCheck(new FieldDependencyInjectionCheck())
+      .verifyIssues();
+  }
+
+  @Test
+  void testAndroid() {
+    CheckVerifier.newVerifier()
+      .onFile(mainCodeSourcesPath("checks/android/FieldDependencyInjectionCheckSample.java"))
       .withCheck(new FieldDependencyInjectionCheck())
       .verifyIssues();
   }

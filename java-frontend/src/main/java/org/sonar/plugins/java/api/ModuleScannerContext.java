@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,11 +17,13 @@
 package org.sonar.plugins.java.api;
 
 import java.io.File;
+import java.util.Optional;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonar.api.SonarProduct;
 import org.sonar.api.SonarRuntime;
 import org.sonar.api.batch.fs.InputComponent;
+import org.sonar.api.config.Configuration;
 import org.sonar.plugins.java.api.caching.CacheContext;
 
 public interface ModuleScannerContext {
@@ -79,9 +81,17 @@ public interface ModuleScannerContext {
 
   /**
    * @return A key that uniquely identifies the current module, provided that this project consists of multiple modules.
+   * This key is not fully qualified, meaning that it does not contain the parent modules keys.
    */
   String getModuleKey();
-
+  
+  /**
+   * @return A key that uniquely identifies the current module, provided that this project consists of multiple modules.
+   * This key is fully qualified, meaning that it contains the parent modules keys as well.
+   * E.g. instead of "level4", it will return the full hierarchy key "level1:level2:level3:level4"
+   */
+  Optional<String> getFullyQualifiedModuleKey();
+  
   /**
    * @return The Sonar product (SONARQUBE/SONARLINT) which forms the current execution context of the scan.
    * See also {@link SonarRuntime#getProduct()}.
@@ -89,6 +99,11 @@ public interface ModuleScannerContext {
    */
   @CheckForNull
   SonarProduct sonarProduct();
+
+  /**
+   * @return The configuration used for the analysis.
+   */
+  Configuration getConfiguration();
 
   @Nullable
   default ProjectContextModelReader getProjectContextModel() {

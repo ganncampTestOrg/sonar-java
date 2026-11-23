@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -21,19 +21,24 @@ import org.sonar.java.checks.verifier.CheckVerifier;
 
 import static org.sonar.java.checks.verifier.TestUtils.nonCompilingTestSourcesPath;
 import static org.sonar.java.checks.verifier.TestUtils.testCodeSourcesPath;
+import static org.sonar.java.test.classpath.TestClasspathUtils.JAVA_17_MODULE;
 
 class MockitoEqSimplificationCheckTest {
 
   @Test
-  void test() {
+  void test_compiling() {
     CheckVerifier.newVerifier()
       .onFile(testCodeSourcesPath("checks/tests/MockitoEqSimplificationCheckSample.java"))
       .withCheck(new MockitoEqSimplificationCheck())
       .verifyIssues();
+  }
 
+  @Test
+  void test_non_compiling() {
     CheckVerifier.newVerifier()
       .onFile(nonCompilingTestSourcesPath("checks/tests/MockitoEqSimplificationCheckSample.java"))
       .withCheck(new MockitoEqSimplificationCheck())
+      .withClassPath(JAVA_17_MODULE.getClassPath())
       .verifyIssues();
   }
 

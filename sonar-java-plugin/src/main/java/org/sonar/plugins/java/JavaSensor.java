@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -25,8 +25,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 import javax.annotation.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.DependedUpon;
 import org.sonar.api.batch.Phase;
 import org.sonar.api.batch.fs.FileSystem;
@@ -45,18 +43,21 @@ import org.sonar.java.filters.PostAnalysisIssueFilter;
 import org.sonar.java.jsp.Jasper;
 import org.sonar.java.model.GeneratedFile;
 import org.sonar.java.model.JavaVersionImpl;
+import org.sonar.java.telemetry.Telemetry;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.JavaResourceLocator;
 import org.sonar.plugins.java.api.JavaVersion;
 import org.sonarsource.performance.measure.PerformanceMeasure;
 
 import static org.sonar.api.rules.RuleAnnotationUtils.getRuleKey;
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_IS_AUTOSCAN;
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_LANGUAGE_VERSION;
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_MODULE_COUNT;
+import static org.sonar.java.telemetry.TelemetryKey.JAVA_SCANNER_APP;
 
 @Phase(name = Phase.Name.PRE)
 @DependedUpon("org.sonar.plugins.java.JavaSensor")
 public class JavaSensor implements Sensor {
-
-  private static final Logger LOG = LoggerFactory.getLogger(JavaSensor.class);
 
   private static final String PERFORMANCE_MEASURE_ACTIVATION_PROPERTY = "sonar.java.performance.measure";
   private static final String PERFORMANCE_MEASURE_FILE_PATH_PROPERTY = "sonar.java.performance.measure.path";
@@ -70,15 +71,16 @@ public class JavaSensor implements Sensor {
   @Nullable
   private final Jasper jasper;
   private final PostAnalysisIssueFilter postAnalysisIssueFilter;
+  private final Telemetry telemetry;
 
   public JavaSensor(SonarComponents sonarComponents, FileSystem fs, JavaResourceLocator javaResourceLocator,
-    Configuration settings, NoSonarFilter noSonarFilter, PostAnalysisIssueFilter postAnalysisIssueFilter) {
-    this(sonarComponents, fs, javaResourceLocator, settings, noSonarFilter, postAnalysisIssueFilter, null);
+    Configuration settings, NoSonarFilter noSonarFilter, PostAnalysisIssueFilter postAnalysisIssueFilter, Telemetry telemetry) {
+    this(sonarComponents, fs, javaResourceLocator, settings, noSonarFilter, postAnalysisIssueFilter, null, telemetry);
   }
 
   public JavaSensor(SonarComponents sonarComponents, FileSystem fs, JavaResourceLocator javaResourceLocator,
     Configuration settings, NoSonarFilter noSonarFilter,
-    PostAnalysisIssueFilter postAnalysisIssueFilter, @Nullable Jasper jasper) {
+    PostAnalysisIssueFilter postAnalysisIssueFilter, @Nullable Jasper jasper, Telemetry telemetry) {
     this.noSonarFilter = noSonarFilter;
     this.sonarComponents = sonarComponents;
     this.fs = fs;
@@ -86,6 +88,7 @@ public class JavaSensor implements Sensor {
     this.settings = settings;
     this.postAnalysisIssueFilter = postAnalysisIssueFilter;
     this.jasper = jasper;
+    this.telemetry = telemetry;
     this.sonarComponents.registerMainChecks(GeneratedCheckList.REPOSITORY_KEY, GeneratedCheckList.getJavaChecks());
     this.sonarComponents.registerTestChecks(GeneratedCheckList.REPOSITORY_KEY, GeneratedCheckList.getJavaTestChecks());
   }
@@ -104,10 +107,19 @@ public class JavaSensor implements Sensor {
 
     Measurer measurer = new Measurer(context, noSonarFilter);
 
-    JavaVersion javaVersion = getJavaVersion();
-    context.addTelemetryProperty("java.language.version", javaVersion.toString());
+    JavaVersion javaVersion = JavaVersionImpl.readFromConfiguration(settings);
+    telemetry.aggregateAsSortedSet(JAVA_LANGUAGE_VERSION, javaVersion.toString());
+    telemetry.aggregateAsCounter(JAVA_MODULE_COUNT, 1L);
 
-    JavaFrontend frontend = new JavaFrontend(javaVersion, sonarComponents, measurer, javaResourceLocator, postAnalysisIssueFilter,
+    telemetry.aggregateAsSortedSet(JAVA_SCANNER_APP, settings.get("sonar.scanner.app").orElse("none"));
+    telemetry.aggregateAsFlag(JAVA_IS_AUTOSCAN, sonarComponents.isAutoScan());
+
+    JavaFrontend frontend = new JavaFrontend(javaVersion,
+      sonarComponents,
+      measurer,
+      telemetry,
+      javaResourceLocator,
+      postAnalysisIssueFilter,
       sonarComponents.mainChecks().toArray(new JavaCheck[0]));
     frontend.scan(getSourceFiles(), getTestFiles(), runJasper(context));
 
@@ -163,24 +175,6 @@ public class JavaSensor implements Sensor {
 
   private Iterable<InputFile> javaFiles(InputFile.Type type) {
     return fs.inputFiles(fs.predicates().and(fs.predicates().hasLanguage(Java.KEY), fs.predicates().hasType(type)));
-  }
-
-  private JavaVersion getJavaVersion() {
-    Optional<String> javaVersionAsString = settings.get(JavaVersion.SOURCE_VERSION);
-    if (!javaVersionAsString.isPresent()) {
-      return new JavaVersionImpl();
-    }
-    String enablePreviewAsString = settings.get(JavaVersion.ENABLE_PREVIEW).orElse("false");
-
-    JavaVersion javaVersion = JavaVersionImpl.fromString(javaVersionAsString.get(), enablePreviewAsString);
-    if (javaVersion.arePreviewFeaturesEnabled() && javaVersion.asInt() < JavaVersionImpl.MAX_SUPPORTED) {
-      LOG.warn("sonar.java.enablePreview is set but will be discarded as the Java version is less than the max" +
-        " supported version ({} < {})", javaVersion.asInt(), JavaVersionImpl.MAX_SUPPORTED);
-      javaVersion = new JavaVersionImpl(javaVersion.asInt(), false);
-    }
-    LOG.info("Configured Java source version ({}): {}, preview features enabled ({}): {}",
-      JavaVersion.SOURCE_VERSION, javaVersion.asInt(), JavaVersion.ENABLE_PREVIEW, javaVersion.arePreviewFeaturesEnabled());
-    return javaVersion;
   }
 
   @Override
