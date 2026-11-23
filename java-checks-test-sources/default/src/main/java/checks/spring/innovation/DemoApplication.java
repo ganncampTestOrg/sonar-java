@@ -22,6 +22,12 @@ public class DemoApplication implements CommandLineRunner {
   Base base; // Noncompliant
 
   @Autowired
+  Handler handler; // Compliant: abstract beans are not registered, FooHandler is the only candidate
+
+  @Autowired
+  Repo<String> stringRepo; // Compliant: generic type arguments select a single bean
+
+  @Autowired
   Environment environment; // Compliant: no @Component implementation, must not fail
 
   public static void main(String[] args) {

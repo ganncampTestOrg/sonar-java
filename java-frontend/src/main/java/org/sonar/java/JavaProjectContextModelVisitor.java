@@ -59,7 +59,8 @@ public class JavaProjectContextModelVisitor extends IssuableSubscriptionVisitor 
     }
 
     SymbolMetadata classSymbolMetadata = classTree.symbol().metadata();
-    if (isSpringBean(classSymbolMetadata)) {
+    // Spring's component scan only registers concrete classes: abstract classes and interfaces are never beans.
+    if (!classTree.symbol().isAbstract() && isSpringBean(classSymbolMetadata)) {
       Symbol.TypeSymbol symbol = classTree.symbol();
       Set<String> types = getTypes(symbol);
       for (String type : types) {

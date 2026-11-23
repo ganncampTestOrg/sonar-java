@@ -49,6 +49,7 @@ import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.JavaResourceLocator;
 import org.sonar.plugins.java.api.JavaVersion;
 import org.sonar.plugins.java.api.ProjectContextModelReader;
+import org.sonar.plugins.java.api.internal.ProjectContextModelConsumer;
 import org.sonarsource.performance.measure.PerformanceMeasure;
 import org.sonarsource.performance.measure.PerformanceMeasure.Duration;
 
@@ -92,7 +93,10 @@ public class JavaFrontend {
     codeVisitors.add(measurer);
     codeVisitors.addAll(commonVisitors);
     codeVisitors.addAll(Arrays.asList(visitors));
-    codeVisitors.add(new JavaProjectContextModelVisitor(projectContextModel));
+    if (Arrays.stream(visitors).anyMatch(ProjectContextModelConsumer.class::isInstance)) {
+      // Building the model forces every main file to be parsed, so only do it when a check reads the model.
+      codeVisitors.add(new JavaProjectContextModelVisitor(projectContextModel));
+    }
 
     List<JavaCheck> testCodeVisitors = new ArrayList<>(commonVisitors);
     testCodeVisitors.add(measurer.new TestFileMeasurer());

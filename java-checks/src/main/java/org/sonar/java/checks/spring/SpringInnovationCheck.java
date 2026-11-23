@@ -30,13 +30,15 @@ import org.sonar.plugins.java.api.InputFileScannerContext;
 import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
 import org.sonar.plugins.java.api.ModuleScannerContext;
 import org.sonar.plugins.java.api.internal.EndOfAnalysis;
+import org.sonar.plugins.java.api.internal.ProjectContextModelConsumer;
 import org.sonar.plugins.java.api.semantic.SymbolMetadata;
+import org.sonar.plugins.java.api.semantic.Type;
 import org.sonar.plugins.java.api.tree.ClassTree;
 import org.sonar.plugins.java.api.tree.Tree;
 import org.sonar.plugins.java.api.tree.VariableTree;
 
 @Rule(key = "S4606")
-public class SpringInnovationCheck extends IssuableSubscriptionVisitor implements EndOfAnalysis {
+public class SpringInnovationCheck extends IssuableSubscriptionVisitor implements EndOfAnalysis, ProjectContextModelConsumer {
   private static final String[] SPRING_INJECTION_ANNOTATIONS = {
     "org.springframework.beans.factory.annotation.Autowired"
   };
@@ -63,7 +65,13 @@ public class SpringInnovationCheck extends IssuableSubscriptionVisitor implement
       for (Tree member: classTree.members()) {
         if (member instanceof VariableTree variableTree) {
           if (hasAnnotation(variableTree.symbol().metadata(), SPRING_INJECTION_ANNOTATIONS)) {
-            String typeFqn = variableTree.symbol().type().fullyQualifiedName();
+            Type fieldType = variableTree.symbol().type();
+            if (fieldType.isUnknown() || fieldType.isParameterized()) {
+              // The model is keyed on erased types, and Spring uses generic type arguments as an implicit qualifier:
+              // `CrudService<User>` can be unambiguous even if several beans implement `CrudService<?>`.
+              continue;
+            }
+            String typeFqn = fieldType.fullyQualifiedName();
 
             Set<Location> locations = injections.computeIfAbsent(typeFqn, k -> new HashSet<>());
 
