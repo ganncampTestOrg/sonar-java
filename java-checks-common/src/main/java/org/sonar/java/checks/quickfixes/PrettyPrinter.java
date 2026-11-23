@@ -1,3 +1,23 @@
+/*
+ * SonarQube Java
+ * Copyright (C) 2012-2024 SonarSource SA
+ * mailto:info AT sonarsource DOT com
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program; if not, write to the Free Software Foundation,
+ * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+ */
+
 package org.sonar.java.checks.quickfixes;
 
 import java.util.List;
@@ -51,9 +71,19 @@ public final class PrettyPrinter implements LightTreeVisitor {
 
   @Override
   public void visitLightBlock(LightBlock block) {
+    if (block.body().isEmpty()) {
+      pps.add("{}");
+      return;
+    }
     pps.add("{").incIndent().newLine();
-    printAllWithSep(block.body(), PrettyprintStringBuilder::semicolonAndNewLine);
-    pps.decIndent().semicolonAndNewLine().add("}");
+    var iter = block.body().iterator();
+    while (iter.hasNext()) {
+      printStatement(iter.next());
+      if (iter.hasNext()) {
+        pps.newLine();
+      }
+    }
+    pps.decIndent().newLine().add("}");
   }
 
   @Override
@@ -66,11 +96,11 @@ public final class PrettyPrinter implements LightTreeVisitor {
     pps.add("if (");
     ifStat.condition().accept(this);
     pps.add(") ");
-    ifStat.thenStatement().accept(this);
+    printStatement(ifStat.thenStatement());
     var elseStat = ifStat.elseStatement();
     if (elseStat != null){
       pps.add(" else ");
-      elseStat.accept(this);
+      printStatement(elseStat);
     }
   }
 
@@ -115,7 +145,7 @@ public final class PrettyPrinter implements LightTreeVisitor {
     pps.add("switch(");
     swtch.expression().accept(this);
     pps.add(") {").incIndent().newLine();
-    swtch.cases().forEach(caze -> caze.accept(this));
+    printAllWithSep(swtch.cases(), PrettyprintStringBuilder::newLine);
     pps.decIndent().newLine().add("}");
   }
 
@@ -123,7 +153,7 @@ public final class PrettyPrinter implements LightTreeVisitor {
   public void visitLightCaseGroup(LightCaseGroup caseGroup) {
     printAllWithSep(caseGroup.labels(), PrettyprintStringBuilder::newLine);
     pps.incIndent().newLine();
-    caseGroup.bodyAsStat().accept(this);
+    printStatement(caseGroup.bodyAsStat());
     pps.decIndent();
   }
 
@@ -132,6 +162,16 @@ public final class PrettyPrinter implements LightTreeVisitor {
     pps.add("case ");
     printAllWithSep(label.expressions(), PrettyprintStringBuilder::addComma);
     pps.add(":");
+  }
+
+  /**
+   * Prints a statement, adding the terminating semicolon when the statement is not block-like.
+   */
+  private void printStatement(LightTree stat) {
+    stat.accept(this);
+    if (!(stat instanceof LightBlock || stat instanceof LightIfStat || stat instanceof LightSwitch)) {
+      pps.add(";");
+    }
   }
 
   private void printAllWithSep(List<? extends LightTree> asts, Consumer<PrettyprintStringBuilder> sep) {
