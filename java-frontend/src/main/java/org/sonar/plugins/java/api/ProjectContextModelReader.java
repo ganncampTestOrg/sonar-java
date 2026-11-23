@@ -20,6 +20,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+/**
+ * Read-only view of what is known about the project being analyzed.
+ * <p>
+ * The model is built by one Java sensor execution, so it only covers the sources and properties files
+ * of the module that is currently analyzed. In multi-module projects, rules must not assume that
+ * it contains the types declared in sibling modules.
+ */
 public interface ProjectContextModelReader {
   boolean isSpringComponent(String fullyQualifiedName);
 
