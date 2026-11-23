@@ -20,7 +20,9 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import javax.annotation.Nullable;
 import org.sonar.java.model.declaration.ClassTreeImpl;
+import org.sonar.plugins.java.api.InputFileScannerContext;
 import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
 import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.semantic.SymbolMetadata;
@@ -57,7 +59,7 @@ public class JavaProjectContextModelVisitor extends IssuableSubscriptionVisitor 
     }
 
     SymbolMetadata classSymbolMetadata = classTree.symbol().metadata();
-    if (hasAnnotation(classSymbolMetadata, SPRING_BEAN_ANNOTATIONS)) {
+    if (isSpringBean(classSymbolMetadata)) {
       Symbol.TypeSymbol symbol = classTree.symbol();
       Set<String> types = getTypes(symbol);
       for (String type : types) {
@@ -67,16 +69,53 @@ public class JavaProjectContextModelVisitor extends IssuableSubscriptionVisitor 
     }
   }
 
-  private static boolean hasAnnotation(SymbolMetadata classSymbolMetadata, String... annotationName) {
-    return Arrays.stream(annotationName).anyMatch(classSymbolMetadata::isAnnotatedWith);
+  /**
+   * A class is a Spring bean when it is annotated with {@code @Component} or with an annotation
+   * that is itself (transitively) meta-annotated with it, such as {@code @Service} or {@code @RestController}.
+   */
+  private static boolean isSpringBean(SymbolMetadata metadata) {
+    return isSpringBean(metadata, new HashSet<>());
+  }
+
+  private static boolean isSpringBean(SymbolMetadata metadata, Set<String> visited) {
+    if (Arrays.stream(SPRING_BEAN_ANNOTATIONS).anyMatch(metadata::isAnnotatedWith)) {
+      return true;
+    }
+    for (SymbolMetadata.AnnotationInstance annotation : metadata.annotations()) {
+      Symbol annotationSymbol = annotation.symbol();
+      if (annotationSymbol.isUnknown() || !visited.add(annotationSymbol.type().fullyQualifiedName())) {
+        continue;
+      }
+      if (isSpringBean(annotationSymbol.metadata(), visited)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * The project model is built from every file, so files must never be skipped when they are unchanged.
+   */
+  @Override
+  public boolean scanWithoutParsing(InputFileScannerContext inputFileScannerContext) {
+    return false;
   }
 
   private static Set<String> getTypes(Symbol.TypeSymbol symbol) {
     var result = new HashSet<String>();
-    result.add(symbol.type().fullyQualifiedName());
-    for (Type iface: symbol.interfaces()) {
-      result.add(iface.fullyQualifiedName());
-    }
+    collectTypes(symbol.type(), result);
     return result;
+  }
+
+  /** Collects the type, all its superclasses and all its direct and inherited interfaces, except {@code java.lang.Object}. */
+  private static void collectTypes(@Nullable Type type, Set<String> result) {
+    if (type == null || type.isUnknown() || type.is("java.lang.Object") || !result.add(type.fullyQualifiedName())) {
+      return;
+    }
+    Symbol.TypeSymbol typeSymbol = type.symbol();
+    collectTypes(typeSymbol.superClass(), result);
+    for (Type iface : typeSymbol.interfaces()) {
+      collectTypes(iface, result);
+    }
   }
 }

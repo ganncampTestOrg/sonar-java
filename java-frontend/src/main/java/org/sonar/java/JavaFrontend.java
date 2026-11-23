@@ -131,7 +131,8 @@ public class JavaFrontend {
         var properties = new Properties();
         properties.load(is);
         projectContextModel.propertiesFiles.put(propertiesFile.relativePath(), properties);
-      } catch (IOException e) {
+      } catch (IOException | RuntimeException e) {
+        // Properties.load throws IllegalArgumentException on a malformed unicode escape: skip the file, never fail the analysis.
         LOG.debug("Failed to read properties file: {}", propertiesFile.filename());
       }
     }

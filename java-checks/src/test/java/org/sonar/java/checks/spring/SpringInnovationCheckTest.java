@@ -34,6 +34,10 @@ class SpringInnovationCheckTest {
       mainCodeSourcesPath(testFolder + "A.java"),
       mainCodeSourcesPath(testFolder + "B.java"),
       mainCodeSourcesPath(testFolder + "Named.java"),
+      mainCodeSourcesPath(testFolder + "C.java"),
+      mainCodeSourcesPath(testFolder + "Base.java"),
+      mainCodeSourcesPath(testFolder + "D.java"),
+      mainCodeSourcesPath(testFolder + "E.java"),
       mainCodeSourcesPath(testFolder + "DemoApplication.java"));
 
     CheckVerifier.newVerifier()

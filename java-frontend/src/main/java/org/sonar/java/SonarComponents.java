@@ -84,7 +84,7 @@ public class SonarComponents extends CheckRegistrar.RegistrarContext {
   private static final Logger LOG = LoggerFactory.getLogger(SonarComponents.class);
   private static final int LOGGED_MAX_NUMBER_UNDEFINED_TYPES = 50;
 
-  public static final String APPLICATION_PROPERTIES_FILE_PATTERN = "*app*.properties";
+  public static final String APPLICATION_PROPERTIES_FILE_PATTERN = "**/*app*.properties";
   public static final String FAIL_ON_EXCEPTION_KEY = "sonar.internal.analysis.failFast";
   public static final String SONAR_BATCH_MODE_KEY = "sonar.java.internal.batchMode";
   public static final String SONAR_AUTOSCAN = "sonar.internal.analysis.autoscan";

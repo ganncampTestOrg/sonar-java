@@ -26,6 +26,7 @@ import org.sonar.check.Rule;
 import org.sonar.java.model.DefaultJavaFileScannerContext;
 import org.sonar.java.model.DefaultModuleScannerContext;
 import org.sonar.java.reporting.AnalyzerMessage;
+import org.sonar.plugins.java.api.InputFileScannerContext;
 import org.sonar.plugins.java.api.IssuableSubscriptionVisitor;
 import org.sonar.plugins.java.api.ModuleScannerContext;
 import org.sonar.plugins.java.api.internal.EndOfAnalysis;
@@ -42,6 +43,12 @@ public class SpringInnovationCheck extends IssuableSubscriptionVisitor implement
 
   record Location(AnalyzerMessage analyzerMessage) {}
   Map<String, Set<Location>> injections = new HashMap<>();
+
+  /** Autowired fields must be collected from every file, so unchanged files must not be skipped. */
+  @Override
+  public boolean scanWithoutParsing(InputFileScannerContext inputFileScannerContext) {
+    return false;
+  }
 
   @Override
   public List<Tree.Kind> nodesToVisit() {
@@ -76,11 +83,15 @@ public class SpringInnovationCheck extends IssuableSubscriptionVisitor implement
   @Override
   public void endOfAnalysis(ModuleScannerContext context) {
     var defaultContext = (DefaultModuleScannerContext) context;
+    var model = defaultContext.getProjectContextModel();
+    if (model == null) {
+      return;
+    }
 
     for(Map.Entry<String,Set<Location>> entry : injections.entrySet()) {
       String typeFqn = entry.getKey();
       Set<Location> locations = entry.getValue();
-      if (defaultContext.getProjectContextModel().availableImpls().get(typeFqn).size() > 1) {
+      if (model.availableImpls().getOrDefault(typeFqn, Set.of()).size() > 1) {
         for(Location location :locations) {
           defaultContext.reportIssue(location.analyzerMessage());
         }
