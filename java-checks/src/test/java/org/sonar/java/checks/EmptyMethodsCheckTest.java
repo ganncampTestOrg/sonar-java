@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.sonar.java.checks.verifier.CheckVerifier;
 
 import static org.sonar.java.checks.verifier.TestUtils.mainCodeSourcesPath;
+import static org.sonar.java.checks.verifier.TestUtils.testCodeSourcesPath;
 
 class EmptyMethodsCheckTest {
 
@@ -27,6 +28,14 @@ class EmptyMethodsCheckTest {
   void test() {
     CheckVerifier.newVerifier()
       .onFile(mainCodeSourcesPath("checks/EmptyMethodsCheckSample.java"))
+      .withCheck(new EmptyMethodsCheck())
+      .verifyIssues();
+  }
+
+  @Test
+  void test_springboot_sanity() {
+    CheckVerifier.newVerifier()
+      .onFile(testCodeSourcesPath("checks/tests/SpringBootEmptyMethodsCheckSample.java"))
       .withCheck(new EmptyMethodsCheck())
       .verifyIssues();
   }

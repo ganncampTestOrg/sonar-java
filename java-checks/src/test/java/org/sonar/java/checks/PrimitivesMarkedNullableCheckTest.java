@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -45,11 +45,10 @@ class PrimitivesMarkedNullableCheckTest {
     CheckVerifier.newVerifier()
       .onFile(mainCodeSourcesPath("checks/jspecify/PrimitivesMarkedNullableCheckNullMarked.java"))
       .withCheck(new PrimitivesMarkedNullableCheck())
-      .verifyIssues();
+      .verifyNoIssues();
     CheckVerifier.newVerifier()
       .onFile(mainCodeSourcesPath("checks/jspecify/nullmarked/PrimitivesMarkedNullableCheck.java"))
       .withCheck(new PrimitivesMarkedNullableCheck())
-      .verifyIssues();
+      .verifyNoIssues();
   }
-
 }

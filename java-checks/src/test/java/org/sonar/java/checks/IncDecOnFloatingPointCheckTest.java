@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -19,16 +19,22 @@ package org.sonar.java.checks;
 import org.junit.jupiter.api.Test;
 import org.sonar.java.checks.verifier.CheckVerifier;
 
-import static org.sonar.java.checks.verifier.TestUtils.mainCodeSourcesPath;
-
-class SelfAssignementCheckTest {
+class IncDecOnFloatingPointCheckTest {
 
   @Test
   void test() {
     CheckVerifier.newVerifier()
-      .onFile(mainCodeSourcesPath("checks/SelfAssignementCheckSample.java"))
-      .withCheck(new SelfAssignementCheck())
+      .onFile("src/test/files/checks/IncDecOnFloatingPointCheck.java")
+      .withCheck(new IncDecOnFloatingPointCheck())
       .verifyIssues();
   }
 
+  @Test
+  void testNoSemantic() {
+    CheckVerifier.newVerifier()
+      .withoutSemantic()
+      .onFile("src/test/files/checks/IncDecOnFloatingPointCheck.java")
+      .withCheck(new IncDecOnFloatingPointCheck())
+      .verifyIssues();
+  }
 }

@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,6 +48,11 @@ public final class TestClasspathUtils {
   public static final Module JAVA_17_MODULE = new Module("java-checks-test-sources/java-17");
   public static final Module SPRING_32_MODULE = new Module("java-checks-test-sources/spring-3.2");
   public static final Module SPRING_WEB_40_MODULE = new Module("java-checks-test-sources/spring-web-4.0");
+  private static final Path testJarsPath = Path.of("java-checks-test-sources/target/test-jars");
+
+  public static List<File> getTestJars(List<String> jars) {
+    return jars.stream().map(name -> testJarsPath.resolve(name + ".jar").toFile()).toList();
+  }
 
   public static class Module {
     private final String relativePath;
@@ -158,11 +163,12 @@ public final class TestClasspathUtils {
     String mavenRepository = findMavenLocalRepository(System::getenv, System::getProperty);
     try {
       String content = Files.readString(toPath(classpathTextFilePath), UTF_8);
-      Arrays.stream(content.split(":"))
+      // Split on ":", but not when it follows Windows drive letter (e.g. "C:\").
+      Arrays.stream(content.split("(?<![A-Z]):"))
         .map(String::trim)
         .filter(line -> !line.isBlank())
         .map(TestClasspathUtils::fixSeparator)
-        .map(line -> line.replace("${M2_REPO}", mavenRepository))
+        .map(line -> line.replace("M2_REPO", mavenRepository))
         .map(Paths::get)
         .forEach(dependencyPath -> {
           if (!Files.exists(dependencyPath)) {

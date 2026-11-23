@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -30,11 +30,12 @@ import org.sonar.plugins.java.api.JavaFileScannerContext;
 import org.sonar.plugins.java.api.Version;
 import org.sonar.plugins.java.api.semantic.Symbol;
 import org.sonar.plugins.java.api.tree.AnnotationTree;
-import org.sonar.plugins.java.api.tree.AssignmentExpressionTree;
 import org.sonar.plugins.java.api.tree.ExpressionTree;
 import org.sonar.plugins.java.api.tree.IdentifierTree;
 import org.sonar.plugins.java.api.tree.MemberSelectExpressionTree;
 import org.sonar.plugins.java.api.tree.Tree;
+
+import static org.sonar.java.model.ExpressionUtils.annotationAttributeName;
 
 @Rule(key = "S4488")
 public class SpringComposedRequestMappingCheck extends IssuableSubscriptionVisitor implements DependencyVersionAware {
@@ -61,7 +62,7 @@ public class SpringComposedRequestMappingCheck extends IssuableSubscriptionVisit
     AnnotationTree annotation = (AnnotationTree) tree;
     if (annotation.symbolType().is("org.springframework.web.bind.annotation.RequestMapping")) {
       List<ExpressionTree> methodValues = annotation.arguments().stream()
-        .filter(argument -> "method".equals(attributeName(argument)))
+        .filter(argument -> "method".equals(annotationAttributeName(argument)))
         .flatMap(ExpressionUtils::extractValues)
         .toList();
 
@@ -91,15 +92,6 @@ public class SpringComposedRequestMappingCheck extends IssuableSubscriptionVisit
       }
     }
     return "";
-  }
-
-  private static String attributeName(ExpressionTree expression) {
-    if (expression.is(Tree.Kind.ASSIGNMENT)) {
-      AssignmentExpressionTree assignment = (AssignmentExpressionTree) expression;
-      // assignment.variable() in annotation is always a Tree.Kind.IDENTIFIER
-      return ((IdentifierTree) assignment.variable()).name();
-    }
-    return "value";
   }
 
   @Override

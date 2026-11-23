@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.LongSupplier;
@@ -41,6 +42,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1064,6 +1066,23 @@ class SonarComponentsTest {
     assertThat(sonarComponents.shouldIgnoreUnnamedModuleForSplitPackage()).isTrue();
   }
 
+  @Test
+  void shouldFailOnStackOverflow_returns_true_by_default() {
+    MapSettings settings = new MapSettings();
+    SonarComponents sonarComponents = new SonarComponents(null, null, null, null, null, null);
+    sonarComponents.setSensorContext(SensorContextTester.create(new File("")).setSettings(settings));
+    assertThat(sonarComponents.shouldFailOnStackOverflow()).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"true", "false"})
+  void shouldFailOnStackOverflow_returns_correct_value_when_set(String value) {
+    MapSettings settings = new MapSettings().setProperty("sonar.java.internal.failOnStackOverflow", value);
+    SonarComponents sonarComponents = new SonarComponents(null, null, null, null, null, null);
+    sonarComponents.setSensorContext(SensorContextTester.create(new File("")).setSettings(settings));
+    assertThat(sonarComponents.shouldFailOnStackOverflow()).isEqualTo(Boolean.valueOf(value));
+  }
+
   @Nested
   class Logging {
     private final DecimalFormat formatter = new DecimalFormat("00");
@@ -1290,6 +1309,7 @@ class SonarComponentsTest {
   void moduleKey_empty() {
     var sonarComponents = new SonarComponents(null, null, null, null, null, null);
     assertThat(sonarComponents.getModuleKey()).isEmpty();
+    assertThat(sonarComponents.getFullyQualifiedModuleKey()).isEmpty();
   }
 
   @Test
@@ -1297,13 +1317,21 @@ class SonarComponentsTest {
     var rootProj = mock(ProjectDefinition.class);
     doReturn(new File("/foo/bar/proj")).when(rootProj).getBaseDir();
     var parentModule = mock(ProjectDefinition.class);
+    var parentProperties = new HashMap<String, String>();
+    parentProperties.put("sonar.moduleKey", "proj1:pmodule");
+    when(parentModule.properties()).thenReturn(parentProperties);
     doReturn(rootProj).when(parentModule).getParent();
     var childModule = mock(ProjectDefinition.class);
+    var childProperties = new HashMap<String, String>();
+    childProperties.put("sonar.moduleKey", "proj1:pmodule:cmodule");
+    when(childModule.properties()).thenReturn(childProperties);
     doReturn(new File("/foo/bar/proj/pmodule/cmodule")).when(childModule).getBaseDir();
     doReturn(parentModule).when(childModule).getParent();
 
     var sonarComponents = new SonarComponents(null, null, null, null, null, null, childModule);
     assertThat(sonarComponents.getModuleKey()).isEqualTo("pmodule/cmodule");
+    assertThat(sonarComponents.getFullyQualifiedModuleKey()).isPresent();
+    assertThat(sonarComponents.getFullyQualifiedModuleKey()).contains("pmodule:cmodule");
   }
 
   @Rule(key = "jsp")

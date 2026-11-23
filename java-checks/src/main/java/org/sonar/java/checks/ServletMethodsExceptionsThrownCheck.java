@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -43,7 +43,7 @@ public class ServletMethodsExceptionsThrownCheck extends IssuableSubscriptionVis
 
   private static final MethodMatchers IS_SERVLET_DO_METHOD = MethodMatchers.create()
     .ofSubTypes("javax.servlet.http.HttpServlet", "jakarta.servlet.http.HttpServlet")
-    .name(name -> name.startsWith("do"))
+    .names("doGet", "doPost", "doPut", "doDelete", "doHead", "doOptions", "doTrace")
     .withAnyParameters().build();
 
   private final Deque<Boolean> shouldCheck = new ArrayDeque<>();
@@ -60,10 +60,10 @@ public class ServletMethodsExceptionsThrownCheck extends IssuableSubscriptionVis
       shouldCheck.push(IS_SERVLET_DO_METHOD.matches((MethodTree) tree));
     } else if (shouldCheck()) {
       if (tree.is(Tree.Kind.TRY_STATEMENT)) {
-        tryCatches.add(getCaughtExceptions(((TryStatementTree) tree).catches()));
+        tryCatches.push(getCaughtExceptions(((TryStatementTree) tree).catches()));
       } else if (tree.is(Tree.Kind.CATCH)) {
         tryCatches.pop();
-        tryCatches.add(Collections.emptyList());
+        tryCatches.push(Collections.emptyList());
       } else if (tree.is(Tree.Kind.THROW_STATEMENT)) {
         addIssueIfNotCaught(((ThrowStatementTree) tree).expression().symbolType(), tree);
       } else if (tree.is(Tree.Kind.METHOD_INVOCATION)) {

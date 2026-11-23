@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -68,6 +68,7 @@ import org.sonar.java.model.JProblem;
 import org.sonar.java.model.LineUtils;
 import org.sonar.java.reporting.AnalyzerMessage;
 import org.sonar.java.reporting.JavaIssue;
+import org.sonar.java.utils.ModuleMetadataUtils;
 import org.sonar.plugins.java.api.CheckRegistrar;
 import org.sonar.plugins.java.api.JavaCheck;
 import org.sonar.plugins.java.api.JavaFileScanner;
@@ -102,6 +103,14 @@ public class SonarComponents extends CheckRegistrar.RegistrarContext {
    * relying on (transitive) dependencies that do not respect modularization as defined by the JLS.
    */
   public static final String SONAR_IGNORE_UNNAMED_MODULE_FOR_SPLIT_PACKAGE = "sonar.java.ignoreUnnamedModuleForSplitPackage";
+
+  /**
+   * Describes whether the analysis should fail and halt when a StackOverflowError is encountered.
+   * True by default, we still want to give the possibility to disable this behavior in case of large projects
+   * for which it is costly to run a whole analysis to then just fail at the end and lose all findings.
+   */
+  public static final String SONAR_FAIL_ON_STACKOVERFLOW = "sonar.java.internal.failOnStackOverflow";
+
   private static final Version SONARLINT_6_3 = Version.parse("6.3");
   private static final Version SONARQUBE_9_2 = Version.parse("9.2");
   @VisibleForTesting
@@ -492,6 +501,10 @@ public class SonarComponents extends CheckRegistrar.RegistrarContext {
     return context.config().getBoolean(SONAR_IGNORE_UNNAMED_MODULE_FOR_SPLIT_PACKAGE).orElse(false);
   }
 
+  public boolean shouldFailOnStackOverflow() {
+    return context.config().getBoolean(SONAR_FAIL_ON_STACKOVERFLOW).orElse(true);
+  }
+
   private static long computeIdealBatchSize() {
     // We take a fraction of the total memory available though -Xmx.
     // If we assume that the average size of a file is 5KB and the average CI should have 1GB of memory,
@@ -501,7 +514,7 @@ public class SonarComponents extends CheckRegistrar.RegistrarContext {
   }
 
   public File projectLevelWorkDir() {
-    var root = getRootProject();
+    var root = ModuleMetadataUtils.getRootProject(projectDefinition);
     if (root != null) {
       return root.getWorkDir();
     } else {
@@ -515,25 +528,16 @@ public class SonarComponents extends CheckRegistrar.RegistrarContext {
    * @return A key representing the module
    */
   public String getModuleKey() {
-    var root = getRootProject();
-    if (root != null && projectDefinition != null) {
-      var rootBase = root.getBaseDir().toPath();
-      var moduleBase = projectDefinition.getBaseDir().toPath();
-      return rootBase.relativize(moduleBase).toString().replace('\\', '/');
-    }
-    return "";
+    return ModuleMetadataUtils.getModuleKey(projectDefinition);
   }
 
-  @CheckForNull
-  private ProjectDefinition getRootProject() {
-    ProjectDefinition current = projectDefinition;
-    if (current == null) {
-      return null;
-    }
-    while (current.getParent() != null) {
-      current = current.getParent();
-    }
-    return current;
+  /**
+   * Returns an OS-independent key that should identify the module and its hierarchy within the project
+   *
+   * @return A fully-qualified key representing the module
+   */
+  public Optional<String> getFullyQualifiedModuleKey() {
+    return ModuleMetadataUtils.getFullyQualifiedModuleKey(projectDefinition);
   }
 
   public boolean canSkipUnchangedFiles() throws ApiMismatchException {

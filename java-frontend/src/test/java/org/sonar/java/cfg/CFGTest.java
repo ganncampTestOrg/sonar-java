@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -1485,7 +1485,7 @@ class CFGTest {
   }
 
   @Test
-  void assignement_order_of_evaluation() {
+  void assignment_order_of_evaluation() {
     CFG cfg = buildCFG("""
         void foo() {
           int[] a = {4,4};

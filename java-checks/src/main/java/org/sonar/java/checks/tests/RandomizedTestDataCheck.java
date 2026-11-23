@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -32,7 +32,7 @@ import org.sonar.plugins.java.api.tree.Tree;
 public class RandomizedTestDataCheck extends IssuableSubscriptionVisitor {
 
   private static final MethodMatchers RANDOM_CONSTRUCTOR_METHOD_MATCHER = MethodMatchers.create()
-    .ofTypes("java.util.Random")
+    .ofSubTypes("java.util.Random")
     .constructor()
     .withAnyParameters()
     .build();

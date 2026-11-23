@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -46,4 +46,19 @@ class UnusedPrivateMethodCheckTest {
       .verifyIssues();
   }
 
+  @Test
+  void should_make_exceptions_for_parameter_annotations() {
+    CheckVerifier.newVerifier()
+      .onFile(TestUtils.mainCodeSourcesPath("checks/UnusedPrivateMethodCheckShouldMakeExceptionsForParameterAnnotations.java"))
+      .withCheck(new UnusedPrivateMethodCheck())
+      .verifyIssues();
+  }
+
+  @Test
+  void should_make_exceptions_for_parameter_annotations_non_compiling() {
+    CheckVerifier.newVerifier()
+      .onFile(TestUtils.nonCompilingTestSourcesPath("checks/UnusedPrivateMethodCheckShouldMakeExceptionsForParameterAnnotations.java"))
+      .withCheck(new UnusedPrivateMethodCheck())
+      .verifyIssues();
+  }
 }

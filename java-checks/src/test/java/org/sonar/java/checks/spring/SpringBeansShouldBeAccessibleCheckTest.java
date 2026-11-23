@@ -1,6 +1,6 @@
 /*
  * SonarQube Java
- * Copyright (C) 2012-2025 SonarSource SA
+ * Copyright (C) 2012-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -91,6 +91,22 @@ class SpringBeansShouldBeAccessibleCheckTest {
       .withCheck(new SpringBeansShouldBeAccessibleCheck())
       .withoutSemantic()
       .verifyNoIssues();
+  }
+
+  @Test
+  void testComponentScanWithBasePackageClasses() {
+    final String testFolder = BASE_PATH + "componentScan/";
+    List<String> files = List.of(
+      mainCodeSourcesPath(testFolder + "basePkgClasses/ignoredPackage/IgnoredService.java"),
+      mainCodeSourcesPath(testFolder + "basePkgClasses/anotherValidPackage/MyOtherService.java"),
+      mainCodeSourcesPath(testFolder + "basePkgClasses/anotherValidPackage/NoOpMarkerReferencedSomewhereElse.java"),
+      mainCodeSourcesPath(testFolder + "basePkgClasses/validPackage/MyService.java"),
+      mainCodeSourcesPath(testFolder + "basePkgClasses/validPackage/NoOpComponentScan.java"));
+
+    CheckVerifier.newVerifier()
+      .onFiles(files)
+      .withCheck(new SpringBeansShouldBeAccessibleCheck())
+      .verifyIssues();
   }
 
   @Test
